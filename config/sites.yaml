@@ -1,55 +1,18 @@
-# Selenium Automation Configuration
-# Real-world examples for scraping public websites.
 
 sites:
-  # Scrape quotes from quotes.toscrape.com (static version)
-  - name: quotes_toscrape_static
+  - name: "quotes_to_scrape"
     base_url: "http://quotes.toscrape.com"
+    steps:
+      - name: "extract_quotes"
+        goto_url: "/"
+        wait_xpath: "//div[@class='quote']"
+        fields:
+          - name: "quote_text"
+            xpath: "//div[@class='quote']/span[@class='text']"
+          - name: "author"
+            xpath: "//div[@class='quote']/small[@class='author']"
+          - name: "tags"
+            xpath: "//div[@class='quote']/div[@class='tags']/a[@class='tag']"
     wait_timeout_sec: 10
-    page_load_timeout_sec: 20
+    page_load_timeout_sec: 30
     capture_enabled: true
-    artifact_dir: "quotes_static"
-
-    steps:
-      - name: homepage
-        goto_url: "/"
-        wait_xpath: "//div[@class='quote']"
-        fields:
-          - name: first_quote_text
-            xpath: "(//span[@class='text'])[1]"
-          - name: first_quote_author
-            xpath: "(//small[@class='author'])[1]"
-
-      - name: next_page_and_capture
-        # This step demonstrates clicking a 'next' button
-        click_xpath: "//li[@class='next']/a"
-        wait_xpath: "//div[@class='quote']" # Wait for next page to load
-        fields:
-          - name: second_page_first_quote
-            xpath: "(//span[@class='text'])[1]"
-
-  # Scrape quotes from the infinite scroll version
-  - name: quotes_toscrape_scroll
-    base_url: "http://quotes.toscrape.com/scroll"
-    wait_timeout_sec: 15
-    page_load_timeout_sec: 25
-    capture_enabled: true
-    artifact_dir: "quotes_scroll"
-
-    steps:
-      - name: scroll_and_collect
-        goto_url: "/"
-        wait_xpath: "//div[@class='quote']"
-        # Execute JS to scroll to the bottom of the page to load more quotes
-        # We'll do this a few times to load more content.
-        # A fixed wait is not ideal, but for this example it's simple.
-        # A better approach would be to wait for a specific element count to increase.
-        # This is not supported by the current config, so we just scroll once.
-        execute_js: |
-          window.scrollTo(0, document.body.scrollHeight);
-          return true;
-        fields:
-          - name: quote_count
-            xpath: "count(//div[@class='quote'])"
-          - name: last_quote_text
-            xpath: "(//div[@class='quote'])[last()]/span[@class='text']"
