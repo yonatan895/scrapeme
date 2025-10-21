@@ -48,6 +48,7 @@ jobs:
         run: |
           pip install --upgrade pip setuptools wheel
           pip install black isort mypy pylint bandit[toml] safety
+          pip install types-PyYAML lxml-stubs
           pip install -r requirements.txt
       
       - name: Run Black (formatting check)
