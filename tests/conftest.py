@@ -1,20 +1,22 @@
 """Shared test fixtures and configuration."""
+
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 
-from core.waits import Waiter
-from core.secrets import EnvSecrets
 from config.models import (
-    SiteConfig,
-    LoginConfig,
-    StepBlock,
     FieldConfig,
+    LoginConfig,
+    SiteConfig,
+    StepBlock,
 )
+from core.secrets import EnvSecrets
+from core.waits import Waiter
 
 
 # Test configuration

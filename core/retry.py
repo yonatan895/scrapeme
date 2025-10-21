@@ -1,24 +1,26 @@
 """Declarative retry policies with exponential backoff and jitter."""
+
 from __future__ import annotations
 
+import logging
 import random
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log,
-    after_log,
-)
+
 from selenium.common.exceptions import (
-    TimeoutException,
-    StaleElementReferenceException,
-    NoSuchElementException,
     ElementClickInterceptedException,
     ElementNotInteractableException,
+    NoSuchElementException,
+    StaleElementReferenceException,
+    TimeoutException,
     WebDriverException,
 )
-import logging
+from tenacity import (
+    after_log,
+    before_sleep_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from core.metrics import Metrics
 
@@ -27,14 +29,16 @@ __all__ = ["RETRYABLE_EXCEPTIONS", "selenium_retry"]
 logger = logging.getLogger(__name__)
 
 # Frozen set of transient Selenium failures
-RETRYABLE_EXCEPTIONS: frozenset[type[Exception]] = frozenset((
-    TimeoutException,
-    StaleElementReferenceException,
-    NoSuchElementException,
-    ElementClickInterceptedException,
-    ElementNotInteractableException,
-    WebDriverException,
-))
+RETRYABLE_EXCEPTIONS: frozenset[type[Exception]] = frozenset(
+    (
+        TimeoutException,
+        StaleElementReferenceException,
+        NoSuchElementException,
+        ElementClickInterceptedException,
+        ElementNotInteractableException,
+        WebDriverException,
+    )
+)
 
 
 def _record_retry_metric(retry_state):
@@ -49,10 +53,10 @@ def _record_retry_metric(retry_state):
 
 def _add_jitter(wait_time: float) -> float:
     """Add jitter to wait time to prevent thundering herd.
-    
+
     Args:
         wait_time: Base wait time in seconds
-        
+
     Returns:
         Wait time with +/- 25% jitter
     """
@@ -62,16 +66,16 @@ def _add_jitter(wait_time: float) -> float:
 
 class JitteredExponentialWait:
     """Exponential backoff with jitter."""
-    
+
     def __init__(self, multiplier: float = 0.5, min_wait: float = 0.5, max_wait: float = 4.0):
         self.multiplier = multiplier
         self.min_wait = min_wait
         self.max_wait = max_wait
-    
+
     def __call__(self, retry_state) -> float:
         """Calculate wait time with jitter."""
         attempt = retry_state.attempt_number
-        wait = min(self.max_wait, self.multiplier * (2 ** attempt))
+        wait = min(self.max_wait, self.multiplier * (2**attempt))
         wait = max(self.min_wait, wait)
         return _add_jitter(wait)
 

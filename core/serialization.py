@@ -1,7 +1,8 @@
 """Type-safe JSON serialization with performance optimization."""
+
 from __future__ import annotations
 
-from dataclasses import is_dataclass, asdict
+from dataclasses import asdict, is_dataclass
 from functools import singledispatch
 from typing import Any
 
@@ -11,7 +12,7 @@ __all__ = ["to_jsonable"]
 @singledispatch
 def to_jsonable(obj: Any) -> Any:
     """Recursively convert objects to JSON-serializable primitives.
-    
+
     Uses singledispatch for O(1) type lookup instead of isinstance chains.
     """
     # Fallback for unknown types
@@ -60,6 +61,7 @@ def _is_dataclass_instance(obj: Any) -> bool:
 
 # Override for dataclasses
 _original_to_jsonable = to_jsonable.dispatch(object)
+
 
 @to_jsonable.register(object)
 def _jsonable_object(obj: object) -> Any:

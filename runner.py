@@ -1,4 +1,5 @@
 """Production-grade orchestration with observability and fault tolerance."""
+
 from __future__ import annotations
 
 import argparse
@@ -11,19 +12,19 @@ from typing import Any
 
 from prometheus_client import start_http_server
 
-from core.browser import BrowserManager
-from core.waits import Waiter
-from core.auth import AuthFlow
-from core.scraper import SiteScraper
-from core.exceptions import AutomationError
-from core.serialization import to_jsonable
-from core.secrets import EnvSecrets
-from core.metrics import Metrics
-from core.circuit_breaker import CircuitBreakerRegistry, CircuitState
 from config.loader import load_sites
-from infra.logging_config import configure_logging
-from infra.signals import setup_signal_handlers, register_shutdown_handler, shutdown_event
+from core.auth import AuthFlow
+from core.browser import BrowserManager
+from core.circuit_breaker import CircuitBreakerRegistry
+from core.exceptions import AutomationError
+from core.metrics import Metrics
+from core.scraper import SiteScraper
+from core.secrets import EnvSecrets
+from core.serialization import to_jsonable
+from core.waits import Waiter
 from infra.health import HealthRegistry, HealthStatus
+from infra.logging_config import configure_logging
+from infra.signals import setup_signal_handlers, shutdown_event
 
 
 def format_error_result(site_name: str, error: Exception) -> dict[str, Any]:
@@ -35,7 +36,7 @@ def format_error_result(site_name: str, error: Exception) -> dict[str, Any]:
             "message": str(error),
         },
     }
-    
+
     # Add ErrorContext if available
     if isinstance(error, AutomationError) and error.context:
         ctx = error.context
@@ -54,7 +55,7 @@ def format_error_result(site_name: str, error: Exception) -> dict[str, Any]:
             context_data["extra"] = ctx.extra
         if context_data:
             result["error"]["context"] = context_data
-    
+
     # Add captured artifacts
     if hasattr(error, "_capture_artifact"):
         artifact = error._capture_artifact
@@ -65,11 +66,11 @@ def format_error_result(site_name: str, error: Exception) -> dict[str, Any]:
             "html": str(artifact.html) if artifact.html else None,
             "url": artifact.url,
         }
-    
+
     # Add timeout info
     if hasattr(error, "timeout_sec") and error.timeout_sec:
         result["error"]["timeout_sec"] = error.timeout_sec
-    
+
     return result
 
 
@@ -96,9 +97,9 @@ def process_site(
                 "message": f"Circuit breaker is {circuit_breaker.state.name}",
             },
         }
-    
+
     start_time = time.monotonic()
-    
+
     try:
         manager = BrowserManager(
             browser=browser,
@@ -110,29 +111,29 @@ def process_site(
             chromedriver_path=chromedriver_path,
             enable_pooling=enable_pooling,
         )
-        
+
         with manager.session() as driver:
             logger = configure_logging().bind(site=site.name)
             waiter = Waiter(driver, timeout_sec=site.wait_timeout_sec)
             secrets = EnvSecrets()
-            
+
             # Optional login
             if site.login:
                 AuthFlow(waiter, logger, secrets, artifact_dir=artifact_dir).login(
                     site.login, site_name=site.name
                 )
-            
+
             # Execute and extract
             scraper = SiteScraper(site, waiter, logger, artifact_dir=artifact_dir)
             data = scraper.run()
-            
+
             # Record success
             duration = time.monotonic() - start_time
             Metrics.record_scrape_success(site.name, duration)
             circuit_breaker.record_success()
-            
+
             return {"site": site.name, "data": data}
-    
+
     except Exception as e:
         duration = time.monotonic() - start_time
         Metrics.record_scrape_failure(site.name, duration, type(e).__name__)
@@ -161,29 +162,29 @@ def main() -> int:
     parser.add_argument("--no-artifacts", action="store_true")
     parser.add_argument("--enable-pooling", action="store_true")
     parser.add_argument("--metrics-port", type=int, default=9090)
-    
+
     args = parser.parse_args()
-    
+
     # Setup infrastructure
     setup_signal_handlers()
     logger = configure_logging(args.log_level, args.log_file, args.json_logs)
-    
+
     # Start metrics server
     start_http_server(args.metrics_port)
     logger.info("metrics_server_started", port=args.metrics_port)
-    
+
     # Register health checks
     HealthRegistry.register(
         "database",
         lambda: (HealthStatus.HEALTHY, "OK"),
     )
-    
+
     # Artifact directory
     artifact_dir = None if args.no_artifacts else args.artifact_dir
     if artifact_dir:
         artifact_dir.mkdir(parents=True, exist_ok=True)
         logger.info("artifacts_enabled", path=str(artifact_dir))
-    
+
     # Load configuration
     try:
         sites = load_sites(args.config)
@@ -191,17 +192,19 @@ def main() -> int:
     except Exception as e:
         logger.exception("config_load_failed", error=str(e))
         return 1
-    
+
     # Set build info
-    Metrics.build_info.info({
-        "version": "2.0.0",
-        "python_version": sys.version.split()[0],
-    })
-    
+    Metrics.build_info.info(
+        {
+            "version": "2.0.0",
+            "python_version": sys.version.split()[0],
+        }
+    )
+
     # Process sites with graceful shutdown support
     results = []
     max_workers = min(args.max_workers, max(1, len(sites)))
-    
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all jobs
         futures = {
@@ -219,14 +222,14 @@ def main() -> int:
             ): site.name
             for site in sites
         }
-        
+
         # Process completions with shutdown check
         for future in as_completed(futures):
             if shutdown_event.is_set():
                 logger.warning("shutdown_requested", pending=len(futures))
                 executor.shutdown(wait=False, cancel_futures=True)
                 break
-            
+
             site_name = futures[future]
             try:
                 result = future.result()
@@ -238,7 +241,7 @@ def main() -> int:
             except Exception as e:
                 logger.exception("site_error", site=site_name)
                 results.append(format_error_result(site_name, e))
-    
+
     # Write results
     try:
         output = json.dumps(to_jsonable(results), indent=2, ensure_ascii=False)
@@ -247,7 +250,7 @@ def main() -> int:
     except Exception as e:
         logger.exception("results_write_failed", error=str(e))
         return 1
-    
+
     return 0
 
 

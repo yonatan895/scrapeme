@@ -1,4 +1,5 @@
 """Exception hierarchy with structured context and artifact support."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -21,9 +22,10 @@ __all__ = [
 @dataclass(slots=True, frozen=True, kw_only=True)
 class ErrorContext:
     """Rich, structured error context for debugging.
-    
+
     All fields optional; populate only relevant context.
     """
+
     site_name: str | None = None
     step_name: str | None = None
     field_name: str | None = None
@@ -37,7 +39,7 @@ class ErrorContext:
 
 class AutomationError(Exception):
     """Base exception with optional structured context."""
-    
+
     def __init__(
         self,
         message: str,
@@ -70,7 +72,7 @@ class ExtractionError(AutomationError):
 
 class TimeoutError(AutomationError):
     """Explicit wait timeout (distinct from builtin TimeoutError)."""
-    
+
     def __init__(
         self,
         message: str,
@@ -84,7 +86,7 @@ class TimeoutError(AutomationError):
 
 class ElementNotFoundError(AutomationError):
     """Element not found after waits and retries."""
-    
+
     def __init__(
         self,
         message: str,

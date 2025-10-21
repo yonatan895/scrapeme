@@ -1,8 +1,9 @@
 """Type aliases and NewTypes for domain modeling."""
+
 from __future__ import annotations
 
-from typing import NewType, TypeAlias
 from pathlib import Path
+from typing import NewType, TypeAlias
 
 # Strong type aliases for domain concepts
 SiteName: TypeAlias = str
