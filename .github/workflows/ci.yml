@@ -72,12 +72,13 @@ jobs:
         if: matrix.tool == 'isort'
         run: |
           source .venv/bin/activate
-          isort --check-only --diff --color core/ config/ infra/ runner.py
+          isort --check-only --diff core/ config/ infra/ runner.py
       
       - name: Run mypy
         if: matrix.tool == 'mypy'
         run: |
           source .venv/bin/activate
+          pip install lxml-stubs
           mypy core/ config/ infra/ runner.py \
             --explicit-package-bases \
             --strict \
