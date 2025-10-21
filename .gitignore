@@ -60,6 +60,7 @@ safety-report.json
 # Artifacts
 artifacts/
 results/
+results.json
 *.png
 *.html
 !tests/fixtures/**/*.html
