@@ -426,6 +426,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: docker
     timeout-minutes: 10
+
+    permissions:
+      contents: read
+      security-events: write  # Required for CodeQL upload
+      actions: read
     
     steps:
       - uses: actions/checkout@v4
