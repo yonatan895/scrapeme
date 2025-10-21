@@ -7,7 +7,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 2 * * 1'
+    - cron: '0 2 * * 1'  # Weekly Monday 2 AM UTC
   workflow_dispatch:
 
 env:
@@ -15,13 +15,14 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+# Cancel in-progress runs for same workflow
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   #############################################
-  # Code Quality (Simplified - each job installs deps)
+  # Code Quality (Parallel)
   #############################################
   lint:
     name: Lint (${{ matrix.tool }})
@@ -55,7 +56,7 @@ jobs:
             uv-${{ runner.os }}-${{ matrix.tool }}-
             uv-${{ runner.os }}-
       
-      - name: Install dependencies with UV
+      - name: Install dependencies
         run: |
           uv venv
           source .venv/bin/activate
@@ -109,7 +110,7 @@ jobs:
           retention-days: 7
 
   #############################################
-  # Security Scanning
+  # Security Scanning (Parallel)
   #############################################
   security:
     name: Security (${{ matrix.scanner }})
@@ -176,7 +177,7 @@ jobs:
           retention-days: 30
 
   #############################################
-  # Tests (Fixed for missing directories)
+  # Tests (Matrix)
   #############################################
   test:
     name: Test (Python ${{ matrix.python-version }})
@@ -221,29 +222,49 @@ jobs:
       
       - name: Create test directories
         run: |
-          mkdir -p tests/unit tests/integration tests/e2e tests/property tests/benchmarks
+          mkdir -p tests/unit tests/integration tests/e2e
           touch tests/__init__.py tests/unit/__init__.py tests/integration/__init__.py
       
+      - name: Check for unit tests
+        id: check-unit
+        run: |
+          if [ -d "tests/unit" ] && compgen -G "tests/unit/test_*.py" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Run unit tests
-        if: hashFiles('tests/unit/*.py') != ''
+        if: steps.check-unit.outputs.exists == 'true'
         run: |
           source .venv/bin/activate
+          mkdir -p test-results
           pytest tests/unit/ -v \
             --cov=core --cov=config --cov=infra \
-            --cov-report=xml --cov-report=html \
             --cov-report=term-missing:skip-covered \
+            --cov-report=xml \
+            --cov-report=html \
             --junitxml=test-results/junit-unit.xml \
-            --maxfail=5 || echo "No unit tests found"
+            --maxfail=5
+      
+      - name: Check for integration tests
+        id: check-integration
+        run: |
+          if [ -d "tests/integration" ] && compgen -G "tests/integration/test_*.py" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
       
       - name: Run integration tests
-        if: hashFiles('tests/integration/*.py') != ''
+        if: steps.check-integration.outputs.exists == 'true'
         run: |
           source .venv/bin/activate
           pytest tests/integration/ -v \
             --cov-append \
             --cov-report=xml \
             --junitxml=test-results/junit-integration.xml \
-            --maxfail=3 || echo "No integration tests found"
+            --maxfail=3
       
       - name: Upload coverage
         if: matrix.python-version == '3.11'
@@ -273,7 +294,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint, test]
     timeout-minutes: 30
-    if: github.event_name != 'schedule' && hashFiles('tests/e2e/*.py') != ''
+    if: github.event_name != 'schedule'
     
     services:
       selenium-hub:
@@ -312,15 +333,27 @@ jobs:
       - name: Wait for Selenium Grid
         run: timeout 60 bash -c 'until curl -sf http://localhost:4444/status; do sleep 2; done'
       
+      - name: Check for E2E tests
+        id: check-e2e
+        run: |
+          if [ -d "tests/e2e" ] && compgen -G "tests/e2e/test_*.py" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️  No E2E tests found"
+          fi
+      
       - name: Run E2E tests
+        if: steps.check-e2e.outputs.exists == 'true'
         env:
           TEST_USER: testuser
           TEST_PASS: testpass123
           SELENIUM_REMOTE_URL: http://localhost:4444/wd/hub
         run: |
           source .venv/bin/activate
+          mkdir -p test-results
           pytest tests/e2e/ -v -m e2e --timeout=300 \
-            --junitxml=test-results/junit-e2e.xml || echo "No e2e tests found"
+            --junitxml=test-results/junit-e2e.xml
       
       - name: Upload E2E artifacts
         if: failure()
@@ -329,56 +362,6 @@ jobs:
           name: e2e-artifacts
           path: artifacts/
           retention-days: 7
-
-  #############################################
-  # Benchmarks (Fixed conflict)
-  #############################################
-  benchmark:
-    name: Performance Benchmark
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    if: github.event_name == 'pull_request' && hashFiles('tests/benchmarks/*.py') != ''
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      
-      - name: Install UV
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
-      
-      - name: Add UV to PATH
-        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      
-      - name: Install dependencies
-        run: |
-          uv venv
-          source .venv/bin/activate
-          # Install without pytest-xdist to avoid conflict
-          uv pip install -e .
-          uv pip install pytest pytest-benchmark
-      
-      - name: Run benchmarks
-        run: |
-          source .venv/bin/activate
-          pytest tests/benchmarks/ \
-            --benchmark-only \
-            --benchmark-json=benchmark.json \
-            --benchmark-compare-fail=mean:10% || echo "No benchmarks found"
-      
-      - name: Store benchmark result
-        if: hashFiles('benchmark.json') != ''
-        uses: benchmark-action/github-action-benchmark@v1
-        with:
-          tool: 'pytest'
-          output-file-path: benchmark.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: false
-          comment-on-alert: true
-          alert-threshold: '150%'
 
   #############################################
   # Docker Build
@@ -419,11 +402,13 @@ jobs:
       
       - name: Test image
         run: |
-          docker run --rm $(echo "${{ steps.meta.outputs.tags }}" | head -1) --help
+          FIRST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -1)
+          docker run --rm "$FIRST_TAG" --help
       
       - name: Save image
         run: |
-          docker save $(echo "${{ steps.meta.outputs.tags }}" | head -1) -o /tmp/image.tar
+          FIRST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -1)
+          docker save "$FIRST_TAG" -o /tmp/image.tar
       
       - name: Upload image
         uses: actions/upload-artifact@v4
@@ -453,7 +438,7 @@ jobs:
       - name: Load image
         run: docker load -i /tmp/image.tar
       
-      - name: Run Trivy
+      - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
           input: /tmp/image.tar
@@ -469,12 +454,72 @@ jobs:
           sarif_file: trivy-results.sarif
 
   #############################################
-  # Publish
+  # Performance Benchmarks
+  #############################################
+  benchmark:
+    name: Performance Benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install UV
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      
+      - name: Add UV to PATH
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      
+      - name: Install dependencies
+        run: |
+          uv venv
+          source .venv/bin/activate
+          uv pip install -e .
+          uv pip install pytest pytest-benchmark
+      
+      - name: Check for benchmarks
+        id: check-benchmarks
+        run: |
+          if [ -d "tests/benchmarks" ] && compgen -G "tests/benchmarks/test_*.py" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️  No benchmark tests found"
+          fi
+      
+      - name: Run benchmarks
+        if: steps.check-benchmarks.outputs.exists == 'true'
+        run: |
+          source .venv/bin/activate
+          pytest tests/benchmarks/ \
+            --benchmark-only \
+            --benchmark-json=benchmark.json \
+            --benchmark-compare-fail=mean:10%
+      
+      - name: Store benchmark result
+        if: steps.check-benchmarks.outputs.exists == 'true'
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'pytest'
+          output-file-path: benchmark.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: false
+          comment-on-alert: true
+          alert-threshold: '150%'
+
+  #############################################
+  # Publish Docker Image
   #############################################
   publish:
     name: Publish Image
     runs-on: ubuntu-latest
-    needs: [docker, docker-scan]
+    needs: [docker, docker-scan, e2e]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     timeout-minutes: 15
     
@@ -488,7 +533,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
-      - name: Log in to GHCR
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -518,9 +563,23 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
+      
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+      
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json
+          retention-days: 90
 
   #############################################
-  # Release
+  # Create GitHub Release
   #############################################
   release:
     name: Create Release
@@ -535,17 +594,31 @@ jobs:
         with:
           fetch-depth: 0
       
+      - name: Generate changelog
+        id: changelog
+        uses: metcalfc/changelog-generator@v4.1.0
+        with:
+          myToken: ${{ secrets.GITHUB_TOKEN }}
+      
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           body: |
             ## 🚀 Release ${{ github.ref_name }}
             
+            ### 📝 Changes
+            ${{ steps.changelog.outputs.changelog }}
+            
             ### 📦 Docker Image
             ```
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
             ```
+            
+            ### 🔒 Security
+            - SBOM available in artifacts
+            - Security scans passed
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
