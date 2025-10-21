@@ -1,0 +1,53 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: selenium-automation-scheduled
+  namespace: selenium-automation
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        metadata:
+          labels:
+            app: selenium-automation
+            job-type: scheduled
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: selenium-automation
+          
+          containers:
+          - name: selenium-automation
+            image: ghcr.io/yourorg/selenium-automation:2.0.0
+            command:
+            - python
+            - runner.py
+            - --config
+            - /config/sites.yaml
+            - --browser
+            - chrome
+            - --headless
+            - --out
+            - /artifacts/results-$(date +%Y%m%d-%H%M%S).json
+            
+            envFrom:
+            - secretRef:
+                name: selenium-secrets
+            
+            volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: artifacts
+              mountPath: /artifacts
+          
+          volumes:
+          - name: config
+            configMap:
+              name: selenium-config
+          - name: artifacts
+            persistentVolumeClaim:
+              claimName: selenium-artifacts

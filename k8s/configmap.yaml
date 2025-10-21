@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: selenium-config
+  namespace: selenium-automation
+data:
+  sites.yaml: |
+    sites:
+      - name: example_site
+        base_url: "https://example.com"
+        wait_timeout_sec: 20
+        page_load_timeout_sec: 30
+        steps:
+          - name: homepage
+            goto_url: "https://example.com"
+            wait_xpath: "//h1"
+            fields:
+              - name: title
+                xpath: "//h1"

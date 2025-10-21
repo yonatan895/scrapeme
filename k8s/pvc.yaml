@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: selenium-artifacts
+  namespace: selenium-automation
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi # That may seem like a lot, but it isn't
+  storageClassName: fast-ssd

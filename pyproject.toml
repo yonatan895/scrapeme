@@ -1,0 +1,92 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "selenium-automation"
+version = "2.0.0"
+description = "Enterprise-grade Selenium automation with observability"
+authors = [{name = "Yonatan Cohen", email = "yonatan.leshco@gmail.com"}]
+license = {text = "MIT"}
+requires-python = ">=3.11"
+dependencies = [
+    "selenium>=4.15.0",
+    "tenacity>=9.1.2",
+    "PyYAML>=6.0",
+    "prometheus-client>=0.19.0",
+    "opentelemetry-api>=1.21.0",
+    "opentelemetry-sdk>=1.21.0",
+    "structlog>=25.4.0",
+    "cachetools>=6.2.1",
+    "psutil>=7.1.1",
+    "lxml >= 6.0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4.0",
+    "pytest-cov>=7.0.0",
+    "pytest-asyncio>=1.2.0",
+    "pytest-xdist>=3.3.0",
+    "pytest-benchmark>=5.1.0",
+    "pytest-timeout>=2.2.0",
+    "hypothesis>=6.92.0",
+    "faker>=37.11.0",
+    "locust>=2.20.0",
+    "black>=25.9.0",
+    "isort>=7.0.0",
+    "mypy>=1.8.0",
+    "pylint>=4.0.2",
+    "bandit[toml]>=1.7.0",
+    "safety>=3.6.2",
+]
+
+[project.scripts]
+selenium-automation = "runner:main"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pylint.main]
+fail-under = 9.0
+max-line-length = 100
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = "-ra -q --strict-markers --cov=core --cov=config --cov-report=term-missing:skip-covered"
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "e2e: End-to-end tests",
+    "property: Property-based tests",
+    "load: Load tests",
+    "chaos: Chaos engineering tests",
+    "slow: Slow tests",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["core", "config"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]

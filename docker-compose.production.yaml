@@ -1,0 +1,134 @@
+version: '3.8'
+
+services:
+  # Main application
+  selenium-automation:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: selenium-automation:latest
+    restart: unless-stopped
+    
+    environment:
+      - SITE_USERNAME=${SITE_USERNAME}
+      - SITE_PASSWORD=${SITE_PASSWORD}
+      - METRICS_PORT=9090
+    
+    volumes:
+      - ./sites.yaml:/app/sites.yaml:ro
+      - artifacts:/app/artifacts
+      - results:/app/results
+    
+    command: >
+      --config sites.yaml
+      --browser chrome
+      --headless
+      --enable-pooling
+      --metrics-port 9090
+      --json-logs
+    
+    networks:
+      - selenium-net
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:9090/metrics')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+  
+  # Selenium Grid Hub
+  selenium-hub:
+    image: selenium/hub:4.15.0
+    restart: unless-stopped
+    ports:
+      - "4444:4444"
+    environment:
+      - SE_SESSION_REQUEST_TIMEOUT=300
+      - SE_NODE_MAX_SESSIONS=5
+      - SE_SESSION_RETRY_INTERVAL=5
+    networks:
+      - selenium-net
+  
+  # Chrome nodes
+  chrome-1:
+    image: selenium/node-chrome:4.15.0
+    restart: unless-stopped
+    shm_size: 2gb
+    depends_on:
+      - selenium-hub
+    environment:
+      - SE_EVENT_BUS_HOST=selenium-hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+      - SE_NODE_MAX_SESSIONS=3
+    networks:
+      - selenium-net
+  
+  chrome-2:
+    image: selenium/node-chrome:4.15.0
+    restart: unless-stopped
+    shm_size: 2gb
+    depends_on:
+      - selenium-hub
+    environment:
+      - SE_EVENT_BUS_HOST=selenium-hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+      - SE_NODE_MAX_SESSIONS=3
+    networks:
+      - selenium-net
+  
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - selenium-net
+  
+  # Grafana
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - selenium-net
+  
+  # Alertmanager
+  alertmanager:
+    image: prom/alertmanager:latest
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    networks:
+      - selenium-net
+
+networks:
+  selenium-net:
+    driver: bridge
+
+volumes:
+  artifacts:
+  results:
+  prometheus-data:
+  grafana-data:

@@ -1,0 +1,67 @@
+groups:
+- name: selenium_automation
+  interval: 30s
+  rules:
+  
+  # High failure rate
+  - alert: HighScrapeFailureRate
+    expr: |
+      rate(selenium_scrapes_total{status="failure"}[5m]) 
+      / 
+      rate(selenium_scrapes_total[5m]) 
+      > 0.5
+    for: 5m
+    labels:
+      severity: warning
+      component: scraper
+    annotations:
+      summary: "High scrape failure rate for {{ $labels.site }}"
+      description: "Failure rate is {{ $value | humanizePercentage }} for site {{ $labels.site }}"
+  
+  # Circuit breaker open
+  - alert: CircuitBreakerOpen
+    expr: |
+      selenium_circuit_breaker_state_changes_total{to_state="OPEN"} > 0
+    for: 1m
+    labels:
+      severity: critical
+      component: circuit-breaker
+    annotations:
+      summary: "Circuit breaker opened for {{ $labels.site }}"
+      description: "Circuit breaker has opened for site {{ $labels.site }}, indicating persistent failures"
+  
+  # Slow scrapes
+  - alert: SlowScrapeLatency
+    expr: |
+      histogram_quantile(0.95, 
+        rate(selenium_scrape_duration_seconds_bucket[5m])
+      ) > 120
+    for: 10m
+    labels:
+      severity: warning
+      component: performance
+    annotations:
+      summary: "Slow scrape latency for {{ $labels.site }}"
+      description: "95th percentile scrape duration is {{ $value }}s for site {{ $labels.site }}"
+  
+  # High memory usage
+  - alert: HighMemoryUsage
+    expr: selenium_memory_usage_bytes > 1.5e9  # 1.5GB
+    for: 5m
+    labels:
+      severity: warning
+      component: resources
+    annotations:
+      summary: "High memory usage detected"
+      description: "Memory usage is {{ $value | humanize }}B"
+  
+  # Too many active sessions
+  - alert: TooManyActiveSessions
+    expr: selenium_active_sessions > 20
+    for: 5m
+    labels:
+      severity: warning
+      component: resources
+    annotations:
+      summary: "Too many active WebDriver sessions"
+      description: "{{ $value }} active sessions detected"

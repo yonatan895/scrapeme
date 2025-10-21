@@ -1,0 +1,84 @@
+{
+  "dashboard": {
+    "title": "Selenium Automation",
+    "tags": ["selenium", "automation"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Scrape Success Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(selenium_scrapes_total{status='success'}[5m]) / rate(selenium_scrapes_total[5m])",
+            "legendFormat": "{{ site }}"
+          }
+        ],
+        "yaxes": [
+          {"format": "percentunit", "min": 0, "max": 1}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Scrape Duration (p95)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(selenium_scrape_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{ site }}"
+          }
+        ],
+        "yaxes": [
+          {"format": "s"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Active Sessions",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "selenium_active_sessions",
+            "legendFormat": "Active Sessions"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Circuit Breaker States",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "selenium_circuit_breaker_state_changes_total",
+            "legendFormat": "{{ site }}: {{ from_state }} → {{ to_state }}"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Retry Count by Exception",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(selenium_retries_total[5m])",
+            "legendFormat": "{{ exception_type }}"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "selenium_memory_usage_bytes",
+            "legendFormat": "Memory"
+          }
+        ],
+        "yaxes": [
+          {"format": "bytes"}
+        ]
+      }
+    ]
+  }
+}
