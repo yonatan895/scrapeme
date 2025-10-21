@@ -97,7 +97,7 @@ test-load: ## Run load tests
 test-chaos: ## Run chaos engineering tests
 	$(PYTEST) tests/chaos/ -v -m chaos
 
-test-all: test test-property ## Run all test suites
+test-all: test test-unit test-integration test-e2e test-property test-load test-chaos ## Run all test suites
 	@echo "$(GREEN)✅ All test suites passed$(NC)"
 
 test-watch: ## Run tests in watch mode (auto-rerun on changes)
@@ -161,6 +161,13 @@ docker-build-test: ## Build test Docker image
 	@echo "$(GREEN)✅ Test image built: $(IMAGE_NAME):test$(NC)"
 
 docker-test: docker-build-test ## Run tests in Docker
+	$(DOCKER) run --rm $(IMAGE_NAME):test pytest -v \
+		--cov=core \
+		--cov=config \
+		--cov=infra \
+		--cov-report=term-missing \
+		--cov-report=html \
+		--cov-report=xml
 	@echo "$(GREEN)✅ Tests passed in Docker$(NC)"
 
 docker-scan: docker-build ## Scan Docker image for vulnerabilities

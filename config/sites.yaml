@@ -1,106 +1,17 @@
-# Selenium Automation Configuration
-# Complete example with all features
-
 sites:
-  # Simple site without login
-  - name: example_public
-    base_url: "https://example.com"
-    wait_timeout_sec: 20
+  - name: "quotes_to_scrape"
+    base_url: "http://quotes.toscrape.com"
+    steps:
+      - name: "extract_quotes"
+        goto_url: "/"
+        wait_xpath: "//div[@class='quote']"
+        fields:
+          - name: "quote_text"
+            xpath: "//div[@class='quote']/span[@class='text']"
+          - name: "author"
+            xpath: "//div[@class='quote']/small[@class='author']"
+          - name: "tags"
+            xpath: "//div[@class='quote']/div[@class='tags']/a[@class='tag']"
+    wait_timeout_sec: 10
     page_load_timeout_sec: 30
     capture_enabled: true
-    artifact_dir: "artifacts/example_public"
-    
-    steps:
-      - name: homepage
-        goto_url: "https://example.com"
-        wait_xpath: "//h1"
-        fields:
-          - name: title
-            xpath: "//h1"
-          - name: description
-            xpath: "//p[@class='lead']"
-  
-  # Site with login and multiple steps
-  - name: example_protected
-    base_url: "https://secure.example.com"
-    wait_timeout_sec: 25
-    page_load_timeout_sec: 40
-    
-    login:
-      url: "https://secure.example.com/login"
-      username_xpath: "//input[@id='username']"
-      password_xpath: "//input[@id='password']"
-      submit_xpath: "//button[@type='submit']"
-      username_env: "EXAMPLE_USERNAME"
-      password_env: "EXAMPLE_PASSWORD"
-      post_login_wait_xpath: "//div[@id='dashboard']"
-      post_login_url_contains: "/dashboard"
-    
-    steps:
-      - name: dashboard
-        wait_xpath: "//h1[text()='Dashboard']"
-        fields:
-          - name: user_name
-            xpath: "//span[@class='user-name']"
-          - name: account_status
-            xpath: "//span[@class='status']"
-      
-      - name: reports
-        goto_url: "https://secure.example.com/reports"
-        wait_xpath: "//table[@id='reports-table']"
-        fields:
-          - name: report_count
-            xpath: "count(//table[@id='reports-table']//tr)"
-          - name: last_report_date
-            xpath: "//table[@id='reports-table']//tr[1]/td[1]"
-  
-  # Site with frames
-  - name: example_frames
-    base_url: "https://frames.example.com"
-    
-    steps:
-      - name: iframe_content
-        goto_url: "https://frames.example.com/page"
-        frames:
-          - xpath: "//iframe[@id='content']"
-        frame_exit: default
-        wait_xpath: "//div[@class='inner-content']"
-        fields:
-          - name: inner_title
-            xpath: "//h2"
-          - name: inner_text
-            xpath: "//p[@class='description']"
-  
-  # Site with JavaScript execution
-  - name: example_spa
-    base_url: "https://spa.example.com"
-    
-    steps:
-      - name: dynamic_content
-        goto_url: "https://spa.example.com/app"
-        execute_js: |
-          return document.readyState === 'complete' && 
-                 window.appLoaded === true;
-        wait_xpath: "//div[@data-loaded='true']"
-        fields:
-          - name: app_version
-            xpath: "//meta[@name='version']"
-            attribute: "content"
-          - name: user_count
-            xpath: "//span[@id='user-count']"
-  
-  # Site with click actions
-  - name: example_interactive
-    base_url: "https://interactive.example.com"
-    
-    steps:
-      - name: load_more
-        goto_url: "https://interactive.example.com/items"
-        wait_xpath: "//button[@id='load-more']"
-        click_xpath: "//button[@id='load-more']"
-       
-        fields:
-          - name: total_items
-            xpath: "count(//div[@class='item'])"
-          - name: last_item_title
-            xpath: "//div[@class='item'][last()]//h3"
