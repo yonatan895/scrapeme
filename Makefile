@@ -355,7 +355,7 @@ benchmark: check-venv ## Run performance benchmarks
 
 profile: check-venv ## Profile application performance
 	@$(MKDIR) profiles 2>/dev/null || true
-	$(VENV_BIN)/python -m cProfile -o profiles/profile.stats runner.py --config sites.yaml
+	$(VENV_BIN)/python -m cProfile -o profiles/profile.stats runner.py --config config/sites.yaml
 	@printf '\n$(YELLOW)Top 20 functions by cumulative time:$(NC)\n'
 	@$(VENV_BIN)/python -c "import pstats; p = pstats.Stats('profiles/profile.stats'); p.sort_stats('cumulative').print_stats(20)"
 	@printf '\n$(GREEN)✅ Profile saved to profiles/profile.stats$(NC)\n'
@@ -365,7 +365,7 @@ memory-profile: check-venv ## Profile memory usage
 		printf '$(YELLOW)Installing memory_profiler...$(NC)\n'; \
 		$(UV) pip install memory-profiler; \
 	}
-	@$(VENV_BIN)/python -m memory_profiler runner.py --config sites.yaml
+	@$(VENV_BIN)/python -m memory_profiler runner.py --config config/sites.yaml
 	@printf '$(GREEN)✅ Memory profiling complete$(NC)\n'
 
 #############################################
