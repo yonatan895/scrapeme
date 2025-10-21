@@ -6,6 +6,7 @@ import concurrent.futures
 import contextlib
 import functools
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, ParamSpec, TypeVar
@@ -20,7 +21,6 @@ __all__ = ["ArtifactCapture", "CapturedArtifact"]
 P = ParamSpec("P")
 R = TypeVar("R")
 
-# Global thread pool for async artifact writing
 _CAPTURE_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
     max_workers=4,
     thread_name_prefix="artifact_writer",
@@ -81,10 +81,7 @@ class ArtifactCapture:
             self._logger.warning(f"Async HTML write failed: {e}")
 
     def capture(self, context: str) -> CapturedArtifact:
-        """Capture artifacts with async I/O.
-
-        Screenshot and HTML are captured synchronously but written async.
-        """
+        """Capture artifacts with async I/O."""
         if not self._enabled:
             return CapturedArtifact(
                 context=context,
@@ -94,18 +91,15 @@ class ArtifactCapture:
                 url=None,
             )
 
-        # Generate safe filename components
         timestamp = time.strftime("%Y%m%d_%H%M%S_%f")[:-3]
         safe_context = "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in context)
 
-        # Capture URL
         current_url = None
         try:
             current_url = self._driver.current_url
         except Exception as e:
             self._logger.debug(f"Failed to retrieve current URL: {e}")
 
-        # Capture screenshot (in-memory)
         screenshot_path = None
         png_data = None
         try:
@@ -115,7 +109,6 @@ class ArtifactCapture:
         except Exception as e:
             self._logger.warning(f"Screenshot capture failed for '{context}': {e}")
 
-        # Capture HTML (in-memory)
         html_path = None
         html_source = None
         try:
@@ -125,7 +118,6 @@ class ArtifactCapture:
         except Exception as e:
             self._logger.warning(f"HTML capture failed for '{context}': {e}")
 
-        # Submit async writes
         if png_data and screenshot_path:
             _CAPTURE_EXECUTOR.submit(self._async_write_screenshot, screenshot_path, png_data)
 
@@ -141,7 +133,7 @@ class ArtifactCapture:
         )
 
     @contextlib.contextmanager
-    def on_failure(self, context: str):
+    def on_failure(self, context: str) -> Iterator[None]:
         """Context manager capturing artifacts only on exception."""
         try:
             yield

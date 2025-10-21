@@ -94,7 +94,10 @@ class TestNetworkChaos:
         # Simulate page load timeout
         mock_waiter.driver.get.side_effect = TimeoutException("Page load timeout")
 
-        with patch('core.capture._CAPTURE_EXECUTOR.submit', side_effect=lambda f, *args, **kwargs: f(*args, **kwargs)):
+        with patch(
+            "core.capture._CAPTURE_EXECUTOR.submit",
+            side_effect=lambda f, *args, **kwargs: f(*args, **kwargs),
+        ):
             with pytest.raises(Exception):
                 scraper.run()
 

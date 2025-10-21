@@ -4,18 +4,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from prometheus_client import start_http_server
 
 from config.loader import load_sites
+from config.models import SiteConfig
 from core.auth import AuthFlow
 from core.browser import BrowserManager
-from core.circuit_breaker import CircuitBreakerRegistry
+from core.circuit_breaker import CircuitBreakerRegistry, CircuitState
 from core.exceptions import AutomationError
 from core.metrics import Metrics
 from core.scraper import SiteScraper
@@ -24,11 +26,14 @@ from core.serialization import to_jsonable
 from core.waits import Waiter
 from infra.health import HealthRegistry, HealthStatus
 from infra.logging_config import configure_logging
-from infra.signals import setup_signal_handlers, shutdown_event
+from infra.signals import register_shutdown_handler, setup_signal_handlers, shutdown_event
+
+if TYPE_CHECKING:
+    from core.capture import CapturedArtifact
 
 
 def format_error_result(site_name: str, error: Exception) -> dict[str, Any]:
-    """Format error with context for JSON output."""
+    """Format error with rich context for JSON output."""
     result: dict[str, Any] = {
         "site": site_name,
         "error": {
@@ -37,10 +42,9 @@ def format_error_result(site_name: str, error: Exception) -> dict[str, Any]:
         },
     }
 
-    # Add ErrorContext if available
     if isinstance(error, AutomationError) and error.context:
         ctx = error.context
-        context_data = {
+        context_data: dict[str, Any] = {
             k: v
             for k, v in {
                 "step": ctx.step_name,
@@ -52,30 +56,37 @@ def format_error_result(site_name: str, error: Exception) -> dict[str, Any]:
             if v is not None
         }
         if ctx.extra:
-            context_data["extra"] = ctx.extra
+            context_data["extra"] = dict(ctx.extra)
         if context_data:
             result["error"]["context"] = context_data
 
-    # Add captured artifacts
+    # Check for dynamically attached artifact using hasattr
     if hasattr(error, "_capture_artifact"):
-        artifact = error._capture_artifact
-        result["error"]["artifacts"] = {
-            "context": artifact.context,
-            "timestamp": artifact.timestamp,
-            "screenshot": str(artifact.screenshot) if artifact.screenshot else None,
-            "html": str(artifact.html) if artifact.html else None,
-            "url": artifact.url,
-        }
+        # Import only when needed to avoid circular imports
+        from core.capture import CapturedArtifact
 
-    # Add timeout info
-    if hasattr(error, "timeout_sec") and error.timeout_sec:
-        result["error"]["timeout_sec"] = error.timeout_sec
+        # Safe attribute access with getattr
+        artifact = getattr(error, "_capture_artifact", None)
+        if artifact is not None and isinstance(artifact, CapturedArtifact):
+            result["error"]["artifacts"] = {
+                "context": artifact.context,
+                "timestamp": artifact.timestamp,
+                "screenshot": str(artifact.screenshot) if artifact.screenshot else None,
+                "html": str(artifact.html) if artifact.html else None,
+                "url": artifact.url,
+            }
+
+    # Check for timeout_sec attribute on TimeoutError
+    if hasattr(error, "timeout_sec"):
+        timeout = getattr(error, "timeout_sec", None)
+        if timeout is not None:
+            result["error"]["timeout_sec"] = timeout
 
     return result
 
 
 def process_site(
-    site,
+    site: SiteConfig,
     *,
     browser: str,
     headless: bool,
@@ -85,9 +96,8 @@ def process_site(
     chromedriver_path: Path | None,
     artifact_dir: Path | None,
     enable_pooling: bool,
-) -> dict:
-    """Process single site with circuit breaker and metrics."""
-    # Check circuit breaker
+) -> dict[str, Any]:
+    """Process single site: login and scrape."""
     circuit_breaker = CircuitBreakerRegistry.get(site.name)
     if not circuit_breaker.is_call_permitted():
         return {
@@ -113,21 +123,18 @@ def process_site(
         )
 
         with manager.session() as driver:
-            logger = configure_logging().bind(site=site.name)
+            logger = logging.getLogger(f"site.{site.name}")
             waiter = Waiter(driver, timeout_sec=site.wait_timeout_sec)
             secrets = EnvSecrets()
 
-            # Optional login
             if site.login:
                 AuthFlow(waiter, logger, secrets, artifact_dir=artifact_dir).login(
                     site.login, site_name=site.name
                 )
 
-            # Execute and extract
             scraper = SiteScraper(site, waiter, logger, artifact_dir=artifact_dir)
             data = scraper.run()
 
-            # Record success
             duration = time.monotonic() - start_time
             Metrics.record_scrape_success(site.name, duration)
             circuit_breaker.record_success()
@@ -165,35 +172,29 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    # Setup infrastructure
     setup_signal_handlers()
     logger = configure_logging(args.log_level, args.log_file, args.json_logs)
 
-    # Start metrics server
     start_http_server(args.metrics_port)
-    logger.info("metrics_server_started", port=args.metrics_port)
+    logger.info(f"Metrics server started on port {args.metrics_port}")
 
-    # Register health checks
     HealthRegistry.register(
-        "database",
+        "ready",
         lambda: (HealthStatus.HEALTHY, "OK"),
     )
 
-    # Artifact directory
     artifact_dir = None if args.no_artifacts else args.artifact_dir
     if artifact_dir:
         artifact_dir.mkdir(parents=True, exist_ok=True)
-        logger.info("artifacts_enabled", path=str(artifact_dir))
+        logger.info(f"Artifacts enabled: {artifact_dir}")
 
-    # Load configuration
     try:
         sites = load_sites(args.config)
-        logger.info("config_loaded", site_count=len(sites))
+        logger.info(f"Loaded {len(sites)} sites")
     except Exception as e:
-        logger.exception("config_load_failed", error=str(e))
+        logger.exception("Failed to load configuration")
         return 1
 
-    # Set build info
     Metrics.build_info.info(
         {
             "version": "2.0.0",
@@ -201,12 +202,10 @@ def main() -> int:
         }
     )
 
-    # Process sites with graceful shutdown support
-    results = []
+    results: list[dict[str, Any]] = []
     max_workers = min(args.max_workers, max(1, len(sites)))
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all jobs
         futures = {
             executor.submit(
                 process_site,
@@ -223,10 +222,9 @@ def main() -> int:
             for site in sites
         }
 
-        # Process completions with shutdown check
         for future in as_completed(futures):
             if shutdown_event.is_set():
-                logger.warning("shutdown_requested", pending=len(futures))
+                logger.warning("Shutdown requested")
                 executor.shutdown(wait=False, cancel_futures=True)
                 break
 
@@ -234,21 +232,20 @@ def main() -> int:
             try:
                 result = future.result()
                 results.append(result)
-                logger.info("site_completed", site=site_name)
+                logger.info(f"✓ Completed: {site_name}")
             except AutomationError as e:
-                logger.error("site_failed", site=site_name, error=str(e))
+                logger.error(f"✗ Automation error on {site_name}: {e}")
                 results.append(format_error_result(site_name, e))
             except Exception as e:
-                logger.exception("site_error", site=site_name)
+                logger.exception(f"✗ Unhandled error on {site_name}")
                 results.append(format_error_result(site_name, e))
 
-    # Write results
     try:
         output = json.dumps(to_jsonable(results), indent=2, ensure_ascii=False)
         args.out.write_text(output, encoding="utf-8")
-        logger.info("results_written", path=str(args.out))
-    except Exception as e:
-        logger.exception("results_write_failed", error=str(e))
+        logger.info(f"Results written to {args.out}")
+    except Exception:
+        logger.exception("Failed to write results")
         return 1
 
     return 0

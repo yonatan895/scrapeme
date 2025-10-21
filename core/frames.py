@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING
 
 from selenium.webdriver.common.by import By
@@ -31,31 +31,11 @@ class FramesNavigator:
             raise ValueError("timeout must be positive")
         self._driver = driver
         self._timeout = timeout
-        self._frame_cache: dict[str, int] = {}  # Cache frame indices by identifier
-
-    def _get_frame_identifier(self, spec: FrameSpec) -> str:
-        """Generate cache key for frame spec."""
-        if spec.xpath is not None:
-            return f"xpath:{spec.xpath}"
-        elif spec.css is not None:
-            return f"css:{spec.css}"
-        elif spec.index is not None:
-            return f"index:{spec.index}"
-        elif spec.name is not None:
-            return f"name:{spec.name}"
-        return "unknown"
+        self._frame_cache: dict[str, int] = {}
 
     def _switch_to_frame(self, spec: FrameSpec) -> None:
-        """Wait for frame availability and switch into it.
-
-        Args:
-            spec: Frame specification with exactly one selector
-
-        Raises:
-            FrameError: If frame not found within timeout
-        """
+        """Wait for frame availability and switch into it."""
         wait = WebDriverWait(self._driver, self._timeout)
-        frame_id = self._get_frame_identifier(spec)
 
         import time
 
@@ -67,7 +47,8 @@ class FramesNavigator:
             elif spec.css is not None:
                 wait.until(EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, spec.css)))
             elif spec.index is not None:
-                wait.until(EC.frame_to_be_available_and_switch_to_it(spec.index))
+                # Selenium expects string locator, not int
+                self._driver.switch_to.frame(spec.index)
             elif spec.name is not None:
                 wait.until(EC.frame_to_be_available_and_switch_to_it(spec.name))
             else:
@@ -80,7 +61,6 @@ class FramesNavigator:
             duration = time.monotonic() - start
             Metrics.wait_duration_seconds.labels(wait_type="frame_switch").observe(duration)
 
-            # Build descriptive frame spec string
             frame_desc = (
                 f"xpath={spec.xpath}"
                 if spec.xpath
@@ -110,19 +90,8 @@ class FramesNavigator:
             ) from e
 
     @contextlib.contextmanager
-    def context(self, frames: Iterable[FrameSpec], *, exit_to: str = "default"):
-        """Context manager for frame entry/exit.
-
-        Args:
-            frames: Sequence of frame specs (outer → inner)
-            exit_to: "default" or "parent"
-
-        Yields:
-            None (in-frame context)
-
-        Guarantees exit to specified context on __exit__.
-        No-op when frames is empty.
-        """
+    def context(self, frames: Iterable[FrameSpec], *, exit_to: str = "default") -> Iterator[None]:
+        """Context manager for frame entry/exit."""
         entered = 0
         for spec in frames:
             self._switch_to_frame(spec)
@@ -139,5 +108,4 @@ class FramesNavigator:
             elif exit_to == "default":
                 self._driver.switch_to.default_content()
             else:
-                # Fallback safety
                 self._driver.switch_to.default_content()

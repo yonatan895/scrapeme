@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import random
+from typing import Any
 
 from selenium.common.exceptions import (
     ElementClickInterceptedException,
@@ -14,6 +15,7 @@ from selenium.common.exceptions import (
     WebDriverException,
 )
 from tenacity import (
+    RetryCallState,
     after_log,
     before_sleep_log,
     retry,
@@ -28,39 +30,31 @@ __all__ = ["RETRYABLE_EXCEPTIONS", "selenium_retry"]
 
 logger = logging.getLogger(__name__)
 
-# Frozen set of transient Selenium failures
-RETRYABLE_EXCEPTIONS: frozenset[type[Exception]] = frozenset(
-    (
-        TimeoutException,
-        StaleElementReferenceException,
-        NoSuchElementException,
-        ElementClickInterceptedException,
-        ElementNotInteractableException,
-        WebDriverException,
-    )
+# Tuple for retry_if_exception_type
+RETRYABLE_EXCEPTIONS = (
+    TimeoutException,
+    StaleElementReferenceException,
+    NoSuchElementException,
+    ElementClickInterceptedException,
+    ElementNotInteractableException,
+    WebDriverException,
 )
 
 
-def _record_retry_metric(retry_state):
+def _record_retry_metric(retry_state: RetryCallState) -> None:
     """Record retry attempt in metrics."""
     if retry_state.outcome and retry_state.outcome.failed:
         exception = retry_state.outcome.exception()
-        Metrics.retries_total.labels(
-            site="unknown",  # Will be overridden by context
-            exception_type=type(exception).__name__,
-        ).inc()
+        if exception:
+            Metrics.retries_total.labels(
+                site="unknown",
+                exception_type=type(exception).__name__,
+            ).inc()
 
 
 def _add_jitter(wait_time: float) -> float:
-    """Add jitter to wait time to prevent thundering herd.
-
-    Args:
-        wait_time: Base wait time in seconds
-
-    Returns:
-        Wait time with +/- 25% jitter
-    """
-    jitter = wait_time * 0.25 * (random.random() * 2 - 1)  # +/- 25%
+    """Add jitter to wait time."""
+    jitter = wait_time * 0.25 * (random.random() * 2 - 1)
     return max(0.1, wait_time + jitter)
 
 
@@ -72,7 +66,7 @@ class JitteredExponentialWait:
         self.min_wait = min_wait
         self.max_wait = max_wait
 
-    def __call__(self, retry_state) -> float:
+    def __call__(self, retry_state: RetryCallState) -> float:
         """Calculate wait time with jitter."""
         attempt = retry_state.attempt_number
         wait = min(self.max_wait, self.multiplier * (2**attempt))
@@ -80,7 +74,6 @@ class JitteredExponentialWait:
         return _add_jitter(wait)
 
 
-# Main retry decorator with logging and metrics
 selenium_retry = retry(
     reraise=True,
     stop=stop_after_attempt(3),
@@ -91,7 +84,6 @@ selenium_retry = retry(
 )
 
 
-# Alternative: More aggressive retry for critical operations
 selenium_retry_aggressive = retry(
     reraise=True,
     stop=stop_after_attempt(5),

@@ -1,7 +1,9 @@
 """Site scraping with streaming results and enhanced metrics."""
+
 from __future__ import annotations
 
 import time
+from logging import Logger
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -9,13 +11,13 @@ from selenium.webdriver.common.by import By
 
 from config.models import FieldConfig, SiteConfig, StepBlock
 from core.capture import ArtifactCapture
-from core.circuit_breaker import CircuitBreakerRegistry
+from core.circuit_breaker import CircuitBreaker, CircuitBreakerRegistry
 from core.exceptions import ErrorContext, ExtractionError
 from core.frames import FramesNavigator
 from core.metrics import Metrics
-from core.rate_limiter import RateLimiter
+from core.rate_limiter import RateLimiter, TokenBucket
 from core.retry import selenium_retry
-from core.url import normalize_url, make_absolute_url, is_absolute_url
+from core.url import is_absolute_url, make_absolute_url, normalize_url
 from core.waits import Waiter
 
 __all__ = ["SiteScraper"]
@@ -24,13 +26,21 @@ __all__ = ["SiteScraper"]
 class SiteScraper:
     """Site scraper with streaming results and rate limiting."""
 
-    __slots__ = ("_config", "_waiter", "_log", "_frames", "_capture", "_rate_limiter", "_circuit_breaker")
+    __slots__ = (
+        "_config",
+        "_waiter",
+        "_log",
+        "_frames",
+        "_capture",
+        "_rate_limiter",
+        "_circuit_breaker",
+    )
 
     def __init__(
         self,
         config: SiteConfig,
         waiter: Waiter,
-        logger,
+        logger: Logger,
         *,
         artifact_dir: Path | None = None,
     ) -> None:
@@ -45,8 +55,10 @@ class SiteScraper:
         else:
             self._capture = ArtifactCapture(waiter.driver, Path(), logger, enabled=False)
 
-        self._circuit_breaker = CircuitBreakerRegistry.get(self._config.name)
-        self._rate_limiter = RateLimiter.get(self._config.name, requests_per_second=2.0)
+        self._circuit_breaker: CircuitBreaker = CircuitBreakerRegistry.get(self._config.name)
+        self._rate_limiter: TokenBucket = RateLimiter.get(
+            self._config.name, requests_per_second=2.0
+        )
 
     @selenium_retry
     def _safe_click(self, xpath: str) -> None:
@@ -63,7 +75,6 @@ class SiteScraper:
         else:
             value = element.text
 
-        # Record metric
         Metrics.fields_extracted_total.labels(
             site=self._config.name,
             step="current",
@@ -73,19 +84,10 @@ class SiteScraper:
         return "" if value is None else str(value)
 
     def _resolve_url(self, url: str) -> str:
-        """Resolve URL to absolute and normalize.
-        
-        Args:
-            url: URL (absolute or relative)
-            
-        Returns:
-            Normalized absolute URL
-        """
-        # If already absolute, just normalize
+        """Resolve URL to absolute and normalize."""
         if is_absolute_url(url):
             return normalize_url(url)
-        
-        # Relative URL - make absolute using base_url
+
         absolute_url = make_absolute_url(url, self._config.base_url)
         return normalize_url(absolute_url)
 
@@ -95,14 +97,12 @@ class SiteScraper:
         success = False
 
         try:
-            # Rate limiting
             if not self._rate_limiter.wait_for_tokens(tokens=1, timeout=30.0):
                 raise ExtractionError(
                     f"Rate limit timeout for step '{step.name}'",
                     context=ErrorContext(site_name=self._config.name, step_name=step.name),
                 )
 
-            # Navigation with page load timing
             if step.goto_url:
                 url = self._resolve_url(step.goto_url)
                 self._log.info(f"GOTO {url!r}")
@@ -115,7 +115,6 @@ class SiteScraper:
                     nav_duration
                 )
 
-            # Frame context
             with self._frames.context(step.frames, exit_to=step.frame_exit):
                 if step.execute_js:
                     self._log.info("Executing JS")
@@ -133,7 +132,6 @@ class SiteScraper:
                     self._log.info("Waiting for URL")
                     self._waiter.url_contains(step.wait_url_contains)
 
-                # Extract fields
                 data: dict[str, Any] = {}
                 for field in step.fields:
                     try:
@@ -181,11 +179,7 @@ class SiteScraper:
         return results
 
     def stream(self) -> Iterator[tuple[str, dict[str, Any]]]:
-        """Stream results step-by-step for memory efficiency.
-        
-        Yields:
-            Tuple of (step_name, step_data)
-        """
+        """Stream results step-by-step for memory efficiency."""
         self._log.info("Begin streaming scrape")
 
         with self._capture.on_failure(f"{self._config.name}_base"):
@@ -197,4 +191,3 @@ class SiteScraper:
             with self._capture.on_failure(f"{self._config.name}_{step.name}"):
                 data = self._exec_step(step)
                 yield (step.name, data)
-

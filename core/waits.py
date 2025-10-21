@@ -1,4 +1,4 @@
-"""Optimized explicit wait utilities with instance caching."""
+"""Explicit wait primitives with enhanced error context."""
 
 from __future__ import annotations
 
@@ -9,8 +9,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from core.exceptions import ElementNotFoundError
-from core.exceptions import TimeoutError as CustomTimeoutError
+from core.exceptions import ElementNotFoundError, TimeoutError
 from core.metrics import Metrics
 
 if TYPE_CHECKING:
@@ -21,7 +20,7 @@ __all__ = ["Waiter"]
 
 
 class Waiter:
-    """Optimized explicit waits with cached WebDriverWait instances."""
+    """Encapsulates explicit waits with enhanced error reporting."""
 
     __slots__ = ("_driver", "_timeout", "_wait_instance")
 
@@ -30,7 +29,6 @@ class Waiter:
             raise ValueError("timeout_sec must be positive")
         self._driver = driver
         self._timeout = timeout_sec
-        # Cache WebDriverWait instance for reuse
         self._wait_instance = WebDriverWait(self._driver, self._timeout)
 
     @property
@@ -43,7 +41,7 @@ class Waiter:
         """Configured timeout in seconds."""
         return self._timeout
 
-    def presence(self, locator: tuple[By, str]) -> WebElement:
+    def presence(self, locator: tuple[str, str]) -> WebElement:
         """Wait for element presence in DOM with metrics."""
         import time
 
@@ -60,7 +58,7 @@ class Waiter:
             url = self._driver.current_url
             raise ElementNotFoundError(f"Element not present: {locator[1]} (URL: {url})") from e
 
-    def visible(self, locator: tuple[By, str]) -> WebElement:
+    def visible(self, locator: tuple[str, str]) -> WebElement:
         """Wait for element visibility with metrics."""
         import time
 
@@ -77,7 +75,7 @@ class Waiter:
             url = self._driver.current_url
             raise ElementNotFoundError(f"Element not visible: {locator[1]} (URL: {url})") from e
 
-    def clickable(self, locator: tuple[By, str]) -> WebElement:
+    def clickable(self, locator: tuple[str, str]) -> WebElement:
         """Wait for element to be clickable with metrics."""
         import time
 
@@ -96,15 +94,13 @@ class Waiter:
 
     def url_contains(self, substring: str) -> bool:
         """Wait for URL to contain substring with metrics."""
-        if not isinstance(substring, str):
-            raise TypeError(f"Expected str, got {type(substring).__name__}")
 
         import time
 
         start = time.monotonic()
 
         try:
-            result = self._wait_instance.until(EC.url_contains(substring))
+            result: bool = self._wait_instance.until(EC.url_contains(substring))
             duration = time.monotonic() - start
             Metrics.wait_duration_seconds.labels(wait_type="url_contains").observe(duration)
             return result
@@ -112,7 +108,7 @@ class Waiter:
             duration = time.monotonic() - start
             Metrics.wait_duration_seconds.labels(wait_type="url_contains").observe(duration)
             url = self._driver.current_url
-            raise CustomTimeoutError(
+            raise TimeoutError(
                 f"URL does not contain '{substring}' (current: {url})",
                 timeout_sec=self._timeout,
             ) from e

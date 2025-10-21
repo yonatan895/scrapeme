@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -19,13 +20,12 @@ from core.exceptions import ConfigError
 __all__ = ["load_sites"]
 
 
-def _parse_field(data: dict) -> FieldConfig:
+def _parse_field(data: dict[str, Any]) -> FieldConfig:
     """Parse and validate field configuration."""
     try:
         name = data["name"]
         xpath = data["xpath"]
 
-        # Validate XPath syntax
         if not validate_xpath(xpath):
             raise ConfigError(f"Invalid XPath in field '{name}': {xpath}")
 
@@ -38,7 +38,7 @@ def _parse_field(data: dict) -> FieldConfig:
         raise ConfigError(f"Invalid field configuration: {data}") from e
 
 
-def _parse_frame(data: dict) -> FrameSpec:
+def _parse_frame(data: dict[str, Any]) -> FrameSpec:
     """Parse and validate frame specification."""
     try:
         spec = FrameSpec(
@@ -47,25 +47,20 @@ def _parse_frame(data: dict) -> FrameSpec:
             index=data.get("index"),
             name=data.get("name"),
         )
-
-        # FrameSpec.__post_init__ validates exactly one selector
         return spec
     except ValueError as e:
         raise ConfigError(f"Invalid frame specification: {data}") from e
 
 
-def _parse_step(data: dict) -> StepBlock:
+def _parse_step(data: dict[str, Any]) -> StepBlock:
     """Parse and validate step block."""
     try:
         name = data["name"]
 
-        # Validate URLs if present
         if goto_url := data.get("goto_url"):
-            # Only validate if it's an absolute URL
-            if "://" in goto_url and not validate_url(goto_url):
+            if not validate_url(goto_url) and not goto_url.startswith("/"):
                 raise ConfigError(f"Invalid goto_url in step '{name}': {goto_url}")
 
-        # Validate XPaths
         for xpath_field in ["click_xpath", "wait_xpath"]:
             if xpath := data.get(xpath_field):
                 if not validate_xpath(xpath):
@@ -86,23 +81,19 @@ def _parse_step(data: dict) -> StepBlock:
         raise ConfigError(f"Invalid step: {data.get('name', '<unnamed>')}") from e
 
 
-def _parse_site(data: dict) -> SiteConfig:
+def _parse_site(data: dict[str, Any]) -> SiteConfig:
     """Parse and validate site configuration."""
     try:
         name = data["name"]
         base_url = data.get("base_url", "")
 
-        # Validate base URL
         if base_url and not validate_url(base_url):
             raise ConfigError(f"Invalid base_url for site '{name}': {base_url}")
 
-        # Parse login if present
         login = None
         if login_data := data.get("login"):
-            # Validate login URL
             if not validate_url(login_data["url"]):
                 raise ConfigError(f"Invalid login URL for site '{name}'")
-
             login = LoginConfig(**login_data)
 
         return SiteConfig(
@@ -120,17 +111,7 @@ def _parse_site(data: dict) -> SiteConfig:
 
 
 def load_sites(path: Path) -> tuple[SiteConfig, ...]:
-    """Load and validate site configurations from YAML.
-
-    Args:
-        path: Path to YAML configuration file
-
-    Returns:
-        Tuple of validated site configurations
-
-    Raises:
-        ConfigError: If configuration is invalid
-    """
+    """Load and validate site configurations from YAML."""
     try:
         content = path.read_text(encoding="utf-8")
         data = yaml.safe_load(content)
@@ -145,7 +126,6 @@ def load_sites(path: Path) -> tuple[SiteConfig, ...]:
 
     sites = tuple(_parse_site(s) for s in data["sites"])
 
-    # Validate unique site names
     names = [s.name for s in sites]
     if len(names) != len(set(names)):
         duplicates = {n for n in names if names.count(n) > 1}
