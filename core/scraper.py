@@ -84,10 +84,19 @@ class SiteScraper:
         return "" if value is None else str(value)
 
     def _resolve_url(self, url: str) -> str:
-        """Resolve URL to absolute and normalize."""
+        """Resolve URL to absolute and normalize.
+
+        Args:
+            url: URL (absolute or relative)
+
+        Returns:
+            Normalized absolute URL
+        """
+        # If already absolute, just normalize
         if is_absolute_url(url):
             return normalize_url(url)
 
+        # Relative URL - make absolute using base_url
         absolute_url = make_absolute_url(url, self._config.base_url)
         return normalize_url(absolute_url)
 
@@ -179,7 +188,11 @@ class SiteScraper:
         return results
 
     def stream(self) -> Iterator[tuple[str, dict[str, Any]]]:
-        """Stream results step-by-step for memory efficiency."""
+        """Stream results step-by-step for memory efficiency.
+
+        Yields:
+            Tuple of (step_name, step_data)
+        """
         self._log.info("Begin streaming scrape")
 
         with self._capture.on_failure(f"{self._config.name}_base"):

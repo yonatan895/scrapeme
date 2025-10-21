@@ -57,7 +57,7 @@ jobs:
       
       - name: Run isort (import sorting)
         run: |
-          isort --check-only --diff --color \
+          isort --check-only --diff \
             core/ config/ infra/ tests/ runner.py
       
       - name: Run mypy (type checking)
