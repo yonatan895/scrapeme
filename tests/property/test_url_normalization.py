@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from hypothesis import given, settings, HealthCheck
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from core.url import normalize_url
@@ -71,14 +71,14 @@ class TestURLNormalizationProperties:
             )
             def test_query_params_preserved(self, base_url: str, params: dict):
                 """Query parameters should be preserved after normalization."""
-                from urllib.parse import urlencode, urlparse, parse_qs
-        
+                from urllib.parse import parse_qs, urlencode, urlparse
+
                 url_with_params = f"{base_url}?{urlencode(params)}"
                 normalized = normalize_url(url_with_params)
-        
+
                 # All param keys should be in normalized URL's query string
                 parsed_url = urlparse(normalized)
                 query_params = parse_qs(parsed_url.query)
-        
+
                 for key in params:
                     assert key in query_params

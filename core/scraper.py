@@ -1,4 +1,5 @@
 """Site scraping with streaming results and enhanced metrics."""
+
 from __future__ import annotations
 
 import time
@@ -15,7 +16,7 @@ from core.frames import FramesNavigator
 from core.metrics import Metrics
 from core.rate_limiter import RateLimiter
 from core.retry import selenium_retry
-from core.url import normalize_url, make_absolute_url, is_absolute_url
+from core.url import is_absolute_url, make_absolute_url, normalize_url
 from core.waits import Waiter
 
 __all__ = ["SiteScraper"]
@@ -24,7 +25,15 @@ __all__ = ["SiteScraper"]
 class SiteScraper:
     """Site scraper with streaming results and rate limiting."""
 
-    __slots__ = ("_config", "_waiter", "_log", "_frames", "_capture", "_rate_limiter", "_circuit_breaker")
+    __slots__ = (
+        "_config",
+        "_waiter",
+        "_log",
+        "_frames",
+        "_capture",
+        "_rate_limiter",
+        "_circuit_breaker",
+    )
 
     def __init__(
         self,
@@ -74,17 +83,17 @@ class SiteScraper:
 
     def _resolve_url(self, url: str) -> str:
         """Resolve URL to absolute and normalize.
-        
+
         Args:
             url: URL (absolute or relative)
-            
+
         Returns:
             Normalized absolute URL
         """
         # If already absolute, just normalize
         if is_absolute_url(url):
             return normalize_url(url)
-        
+
         # Relative URL - make absolute using base_url
         absolute_url = make_absolute_url(url, self._config.base_url)
         return normalize_url(absolute_url)
@@ -182,7 +191,7 @@ class SiteScraper:
 
     def stream(self) -> Iterator[tuple[str, dict[str, Any]]]:
         """Stream results step-by-step for memory efficiency.
-        
+
         Yields:
             Tuple of (step_name, step_data)
         """
@@ -197,4 +206,3 @@ class SiteScraper:
             with self._capture.on_failure(f"{self._config.name}_{step.name}"):
                 data = self._exec_step(step)
                 yield (step.name, data)
-
