@@ -147,8 +147,11 @@ class TestSiteConfig:
 
     def test_total_fields_property(self, sample_field_config):
         """Test total_fields property."""
-        step1 = StepBlock(name="step1", fields=(sample_field_config,))
-        step2 = StepBlock(name="step2", fields=(sample_field_config, sample_field_config))
+        field1 = sample_field_config
+        field2 = FieldConfig(name="field2", xpath="//p")
+        field3 = FieldConfig(name="field3", xpath="//div")
+        step1 = StepBlock(name="step1", fields=(field1,))
+        step2 = StepBlock(name="step2", fields=(field2, field3))
 
         site = SiteConfig(
             name="test",

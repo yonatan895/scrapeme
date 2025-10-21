@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, patch, PropertyMock
 
 import pytest
 from selenium import webdriver
@@ -50,7 +50,14 @@ def mock_driver():
 @pytest.fixture
 def mock_waiter(mock_driver):
     """Mock Waiter with mock driver."""
-    return Waiter(mock_driver, timeout_sec=10)
+    mock_waiter_instance = MagicMock(spec=Waiter)
+    type(mock_waiter_instance).driver = PropertyMock(return_value=mock_driver) # Mock the property
+    mock_waiter_instance.timeout = 10 # Set a default integer value for timeout
+    mock_waiter_instance.visible.return_value = MagicMock() # Default return value
+    mock_waiter_instance.presence.return_value = MagicMock() # Default return value
+    mock_waiter_instance.clickable.return_value = MagicMock() # Default return value
+    mock_waiter_instance.url_contains.return_value = True # Default return value
+    return mock_waiter_instance
 
 
 @pytest.fixture
@@ -153,3 +160,11 @@ def mock_metrics():
     """Mock Prometheus metrics."""
     with patch("core.metrics.Metrics") as mock:
         yield mock
+
+
+@pytest.fixture
+def ensure_capture_executor_shutdown(tmp_path):
+    """Ensures the capture executor is shut down after tests using tmp_path."""
+    yield
+    from core.capture import shutdown_capture_executor
+    shutdown_capture_executor()

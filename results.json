@@ -1,0 +1,16 @@
+[
+  {
+    "site": "quotes_toscrape_scroll",
+    "error": {
+      "type": "PermissionError",
+      "message": "[Errno 13] Permission denied: 'artifacts/scrape'"
+    }
+  },
+  {
+    "site": "quotes_toscrape_static",
+    "error": {
+      "type": "PermissionError",
+      "message": "[Errno 13] Permission denied: 'artifacts/scrape'"
+    }
+  }
+]

@@ -1,5 +1,4 @@
 """Site scraping with streaming results and enhanced metrics."""
-
 from __future__ import annotations
 
 import time
@@ -10,12 +9,13 @@ from selenium.webdriver.common.by import By
 
 from config.models import FieldConfig, SiteConfig, StepBlock
 from core.capture import ArtifactCapture
+from core.circuit_breaker import CircuitBreakerRegistry
 from core.exceptions import ErrorContext, ExtractionError
 from core.frames import FramesNavigator
 from core.metrics import Metrics
 from core.rate_limiter import RateLimiter
 from core.retry import selenium_retry
-from core.url import normalize_url
+from core.url import normalize_url, make_absolute_url, is_absolute_url
 from core.waits import Waiter
 
 __all__ = ["SiteScraper"]
@@ -24,7 +24,7 @@ __all__ = ["SiteScraper"]
 class SiteScraper:
     """Site scraper with streaming results and rate limiting."""
 
-    __slots__ = ("_config", "_waiter", "_log", "_frames", "_capture", "_rate_limiter")
+    __slots__ = ("_config", "_waiter", "_log", "_frames", "_capture", "_rate_limiter", "_circuit_breaker")
 
     def __init__(
         self,
@@ -45,7 +45,7 @@ class SiteScraper:
         else:
             self._capture = ArtifactCapture(waiter.driver, Path(), logger, enabled=False)
 
-        # Per-site rate limiter
+        self._circuit_breaker = CircuitBreakerRegistry.get(self._config.name)
         self._rate_limiter = RateLimiter.get(self._config.name, requests_per_second=2.0)
 
     @selenium_retry
@@ -66,11 +66,28 @@ class SiteScraper:
         # Record metric
         Metrics.fields_extracted_total.labels(
             site=self._config.name,
-            step="current",  # Will be set by caller
+            step="current",
             field=field.name,
         ).inc()
 
         return "" if value is None else str(value)
+
+    def _resolve_url(self, url: str) -> str:
+        """Resolve URL to absolute and normalize.
+        
+        Args:
+            url: URL (absolute or relative)
+            
+        Returns:
+            Normalized absolute URL
+        """
+        # If already absolute, just normalize
+        if is_absolute_url(url):
+            return normalize_url(url)
+        
+        # Relative URL - make absolute using base_url
+        absolute_url = make_absolute_url(url, self._config.base_url)
+        return normalize_url(absolute_url)
 
     def _exec_step(self, step: StepBlock) -> dict[str, Any]:
         """Execute single step with metrics."""
@@ -87,7 +104,7 @@ class SiteScraper:
 
             # Navigation with page load timing
             if step.goto_url:
-                url = normalize_url(step.goto_url)
+                url = self._resolve_url(step.goto_url)
                 self._log.info(f"GOTO {url!r}")
 
                 nav_start = time.monotonic()
@@ -153,7 +170,8 @@ class SiteScraper:
 
         with self._capture.on_failure(f"{self._config.name}_base"):
             if self._config.base_url:
-                self._waiter.driver.get(normalize_url(self._config.base_url))
+                base_url = normalize_url(self._config.base_url)
+                self._waiter.driver.get(base_url)
 
         results: dict[str, dict[str, Any]] = {}
         for step in self._config.steps:
@@ -164,7 +182,7 @@ class SiteScraper:
 
     def stream(self) -> Iterator[tuple[str, dict[str, Any]]]:
         """Stream results step-by-step for memory efficiency.
-
+        
         Yields:
             Tuple of (step_name, step_data)
         """
@@ -172,9 +190,11 @@ class SiteScraper:
 
         with self._capture.on_failure(f"{self._config.name}_base"):
             if self._config.base_url:
-                self._waiter.driver.get(normalize_url(self._config.base_url))
+                base_url = normalize_url(self._config.base_url)
+                self._waiter.driver.get(base_url)
 
         for step in self._config.steps:
             with self._capture.on_failure(f"{self._config.name}_{step.name}"):
                 data = self._exec_step(step)
                 yield (step.name, data)
+

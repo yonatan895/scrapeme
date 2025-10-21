@@ -74,10 +74,7 @@ test: ## Run all tests with coverage
 	$(PYTEST) -v \
 		--cov=core \
 		--cov=config \
-		--cov=infra \
-		--cov-report=term-missing \
-		--cov-report=html \
-		--cov-report=xml
+		--cov=infra
 
 test-unit: ## Run unit tests only
 	$(PYTEST) tests/unit/ -v -m unit
@@ -149,7 +146,7 @@ profile: ## Profile application performance
 # === Docker ===
 
 docker-build: ## Build production Docker image
-	$(DOCKER) build -t $(IMAGE_NAME):$(IMAGE_TAG) --target production .
+	$(DOCKER) build -t $(IMAGE_NAME):$(IMAGE_TAG) --target production --no-cache .
 	@echo "$(GREEN)✅ Production image built: $(IMAGE_NAME):$(IMAGE_TAG)$(NC)"
 
 docker-build-dev: ## Build development Docker image
@@ -174,8 +171,7 @@ docker-push: docker-build ## Push Docker image to registry
 
 docker-run: ## Run Docker container with example config
 	$(DOCKER) run --rm \
-		-v $(PWD)/sites.yaml:/app/sites.yaml:ro \
-		-v $(PWD)/artifacts:/app/artifacts \
+		-v $(PWD)/config/sites.yaml:/app/sites.yaml:ro \
 		-e SITE_USERNAME=${SITE_USERNAME} \
 		-e SITE_PASSWORD=${SITE_PASSWORD} \
 		$(IMAGE_NAME):$(IMAGE_TAG)

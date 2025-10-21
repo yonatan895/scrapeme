@@ -61,7 +61,8 @@ def _parse_step(data: dict) -> StepBlock:
 
         # Validate URLs if present
         if goto_url := data.get("goto_url"):
-            if not validate_url(goto_url):
+            # Only validate if it's an absolute URL
+            if "://" in goto_url and not validate_url(goto_url):
                 raise ConfigError(f"Invalid goto_url in step '{name}': {goto_url}")
 
         # Validate XPaths
