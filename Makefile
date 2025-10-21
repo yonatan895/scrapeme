@@ -192,7 +192,7 @@ docker-shell: ## Open shell in Docker container
 # === Docker Compose ===
 
 compose-up: ## Start docker-compose stack (includes Selenium Grid + Monitoring)
-	$(DOCKER_COMPOSE) -f docker-compose.production.yml up -d
+	$(DOCKER_COMPOSE) -f docker-compose.production.yaml up -d
 	@echo "$(GREEN)✅ Docker Compose stack started$(NC)"
 	@echo "Services available at:"
 	@echo "  - Selenium Hub: http://localhost:4444"
@@ -205,7 +205,7 @@ compose-down: ## Stop docker-compose stack
 	@echo "$(GREEN)✅ Docker Compose stack stopped$(NC)"
 
 compose-logs: ## View docker-compose logs
-	$(DOCKER_COMPOSE) -f docker-compose.production.yml logs -f
+	$(DOCKER_COMPOSE) -f docker-compose.production.yaml logs -f
 
 compose-restart: compose-down compose-up ## Restart docker-compose stack
 
