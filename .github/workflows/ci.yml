@@ -61,7 +61,8 @@ jobs:
           uv venv
           source .venv/bin/activate
           uv pip install -e ".[lint]"
-      
+          uv pip install types-lxml types-PyYAML
+          
       - name: Run Black
         if: matrix.tool == 'black'
         run: |
@@ -78,7 +79,6 @@ jobs:
         if: matrix.tool == 'mypy'
         run: |
           source .venv/bin/activate
-          pip install lxml-stubs
           mypy core/ config/ infra/ runner.py \
             --explicit-package-bases \
             --strict \
