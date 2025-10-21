@@ -1,3 +1,4 @@
+
 sites:
   - name: "quotes_to_scrape"
     base_url: "http://quotes.toscrape.com"

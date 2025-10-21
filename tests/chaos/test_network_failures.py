@@ -84,6 +84,7 @@ class TestNetworkChaos:
         mock_logger,
         sample_site_config,
         tmp_path,
+        ensure_capture_executor_shutdown,
     ):
         """Timeouts should be handled gracefully."""
         from selenium.common.exceptions import TimeoutException
@@ -93,8 +94,9 @@ class TestNetworkChaos:
         # Simulate page load timeout
         mock_waiter.driver.get.side_effect = TimeoutException("Page load timeout")
 
-        with pytest.raises(Exception):
-            scraper.run()
+        with patch('core.capture._CAPTURE_EXECUTOR.submit', side_effect=lambda f, *args, **kwargs: f(*args, **kwargs)):
+            with pytest.raises(Exception):
+                scraper.run()
 
         # Verify artifacts captured
         artifacts = list(tmp_path.glob("**/*.png"))
