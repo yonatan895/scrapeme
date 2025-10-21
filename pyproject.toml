@@ -46,6 +46,8 @@ dev = [
     "faker>=37.11.0",
     "Flask>=3.0.0,<4.0.0",
     "responses>=0.23.0,<1.0.0",
+    "types-PyYAML>=6.0.12",
+    "lxml-stubs>=0.5.1"
 ]
 
 # Code quality

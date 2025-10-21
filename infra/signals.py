@@ -1,6 +1,16 @@
-import signal
-import threading
+"""Signal handling for graceful shutdown."""
 
+from __future__ import annotations
+
+import signal
+import sys
+import threading
+from types import FrameType
+from typing import Callable
+
+__all__ = ["setup_signal_handlers", "shutdown_event", "register_shutdown_handler"]
+
+# Global shutdown event
 shutdown_event = threading.Event()
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from logging import Logger
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,8 +14,6 @@ from core.metrics import Metrics
 from core.retry import selenium_retry
 
 if TYPE_CHECKING:
-    from logging import Logger
-
     from config.models import LoginConfig
     from core.capture import ArtifactCapture
     from core.secrets import SecretProvider
@@ -74,15 +73,7 @@ class AuthFlow:
         element.click()
 
     def login(self, config: LoginConfig, *, site_name: str = "unknown") -> None:
-        """Execute login flow with post-login verification.
-
-        Args:
-            config: Login configuration
-            site_name: Site name for error context and metrics
-
-        Raises:
-            LoginError: If credentials missing or login fails
-        """
+        """Execute login flow with post-login verification."""
         username = self._secrets.get(config.username_env)
         password = self._secrets.get(config.password_env)
 
@@ -105,7 +96,6 @@ class AuthFlow:
                 self._fill_field(config.password_xpath, password)
                 self._click_element(config.submit_xpath)
 
-                # Post-login verification
                 if config.post_login_wait_xpath is not None:
                     self._log.info("Waiting for post-login element")
                     self._waiter.visible((By.XPATH, config.post_login_wait_xpath))
@@ -116,7 +106,7 @@ class AuthFlow:
 
                 duration = time.monotonic() - start_time
                 Metrics.login_attempts_total.labels(site=site_name, status="success").inc()
-                self._log.info("Login successful", extra={"duration_sec": duration})
+                self._log.info(f"Login successful (duration: {duration:.2f}s)")
 
             except Exception as e:
                 duration = time.monotonic() - start_time

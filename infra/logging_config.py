@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any, cast
 
 import structlog
+from structlog.typing import EventDict, WrappedLogger
 
 __all__ = ["configure_logging"]
 
@@ -14,7 +16,7 @@ def configure_logging(
     level: str = "INFO",
     log_file: Path | None = None,
     json_logs: bool = False,
-) -> structlog.BoundLogger:
+) -> structlog.stdlib.BoundLogger:
     """Configure structured logging.
 
     Args:
@@ -26,17 +28,19 @@ def configure_logging(
         Configured logger
     """
     # Configure standard logging
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+
+    if log_file:
+        handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
+
     logging.basicConfig(
         format="%(message)s",
         level=getattr(logging, level.upper()),
-        handlers=[
-            logging.StreamHandler(),
-            *([logging.FileHandler(log_file, encoding="utf-8")] if log_file else []),
-        ],
+        handlers=handlers,
     )
 
-    # Configure structlog
-    processors = [
+    # Configure structlog processors
+    processors: list[structlog.types.Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
@@ -58,4 +62,5 @@ def configure_logging(
         cache_logger_on_first_use=True,
     )
 
-    return structlog.get_logger()
+    # Cast to correct return type
+    return cast(structlog.stdlib.BoundLogger, structlog.get_logger())
