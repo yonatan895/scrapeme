@@ -21,6 +21,10 @@ scrape_configs:
       namespaces:
         names:
         - selenium-automation
+        
+  - job_name: "docker-compose-app"
+    static_configs:
+    - targets: ["app:9115"]
     
     relabel_configs:
     - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
