@@ -35,7 +35,7 @@ BANDIT := $(VENV_BIN)/bandit
 SAFETY := $(VENV_BIN)/safety
 PRE_COMMIT := $(VENV_BIN)/pre-commit
 DOCKER := docker
-DOCKER_COMPOSE := docker-compose
+DOCKER_COMPOSE := docker compose
 IMAGE_NAME := scrapeme
 IMAGE_TAG := latest
 REGISTRY := ghcr.io/yonatan895
@@ -467,7 +467,7 @@ docker-clean: ## Remove all Docker images and containers
 #############################################
 
 compose-up: ## Start full stack (Selenium Grid + Monitoring)
-	$(DOCKER_COMPOSE) -f docker-compose.production.yml up -d
+	$(DOCKER_COMPOSE) -f docker-compose.production.yaml up -d
 	@printf '$(GREEN)✅ Docker Compose stack started$(NC)\n'
 	@printf '\n$(YELLOW)Services available at:$(NC)\n'
 	@printf '  Selenium Hub:  $(BLUE)http://localhost:4444$(NC)\n'
