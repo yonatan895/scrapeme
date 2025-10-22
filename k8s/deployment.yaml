@@ -34,7 +34,7 @@ spec:
       
       containers:
       - name: selenium-automation
-        image: ghcr.io/yourorg/selenium-automation:2.0.0
+        image: ghcr.io/yonatan895/selenium-automation:2.0.0
         imagePullPolicy: Always
         
         command:
