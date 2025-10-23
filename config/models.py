@@ -8,7 +8,6 @@ from typing import Literal
 
 __all__ = [
     "Browser",
-    "FrameExit",
     "FieldConfig",
     "LoginConfig",
     "FrameSpec",
@@ -22,13 +21,6 @@ class Browser(StrEnum):
 
     CHROME = "chrome"
     FIREFOX = "firefox"
-
-
-class FrameExit(StrEnum):
-    """Frame exit strategies."""
-
-    DEFAULT = "default"
-    PARENT = "parent"
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
