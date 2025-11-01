@@ -6,62 +6,53 @@
 
 A robust, production-ready web scraping and automation framework built with Selenium, featuring comprehensive observability, fault tolerance, and developer‑friendly tooling.
 
-- Docs live in docs/: start with docs/README.md
-- Kubernetes support was removed by design; Docker and local execution are first‑class.
+- Docs: see docs/README.md
+- Kubernetes support removed; Docker/local execution is first‑class.
 
-## 🚀 Quick Start
-
+## Quick start
 ```bash
 make quickstart
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 python runner.py --config config/sites.yaml --headless --out results.json
 ```
 
-See docs/getting-started.md for details.
-
-## 🧰 Common Make targets
-
+## Common make targets
 - make venv / make venv-clear
 - make install-all / make verify-install
 - make format / make lint / make check / make test
 - make deps-tree / make deps-outdated
-- make load-run (headless Locust; see docs/testing.md)
+- make load-run   # headless Locust; see docs/testing.md
 - docker: make docker-build / docker-run / docker-shell
+- compose: make compose-up / compose-down / compose-logs / compose-restart
 
-## 🧪 Tests & Quality
-
-- pytest with markers (unit, integration, e2e)
-- black, isort, mypy (strict), pylint
-- pre-commit supported: make pre-commit-install
-
-## 📈 Observability
-
-- Metrics on port 9090 (Prometheus format)
-- Health endpoints via infra/server.py:
-  - /healthz (liveness)
-  - /ready (readiness)
-
-## 📂 Project Layout
-
-- core/    — scraping, browser/session mgmt, waits, metrics
-- config/  — typed config loader and models
-- infra/   — logging, signals, health server
-- tests/   — test suites
-- docs/    — documentation
-
-## 🐳 Docker
-
-- Multi-stage Dockerfile with wheels cache
+## Docker
+- Multi-stage Dockerfile with wheel build cache
 - Targets: production, dev, test
-
 ```bash
 make docker-build
 make docker-run
 ```
 
-## 🔄 Recent changes
+## Docker Compose
+A production-oriented compose file is provided.
+```bash
+docker compose -f docker-compose.production.yaml up -d
+# logs
+docker compose -f docker-compose.production.yaml logs -f
+# stop
+docker compose -f docker-compose.production.yaml down
+```
+Adjust environment via .env (see .env.example) and tune resource limits as needed.
 
-- Robust Makefile Python detection (uv + dynamic venv python lookup)
-- Health server and TypedDict‑typed JSON responses
-- Added concise documentation under docs/
-- Kubernetes manifests removed; focus on Docker/local workflows
+## Observability
+- Metrics on port 9090 (Prometheus format)
+- Health endpoints via infra/server.py:
+  - /healthz (liveness)
+  - /ready (readiness)
+
+## Project layout
+- core/    — scraping, browser/session mgmt, waits, metrics
+- config/  — typed config loader and models
+- infra/   — logging, signals, health server
+- tests/   — test suites
+- docs/    — documentation
