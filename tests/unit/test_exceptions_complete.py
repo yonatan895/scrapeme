@@ -1,8 +1,13 @@
-"""Unit tests for core.exceptions to achieve complete coverage."""
+"""Unit tests for core.exceptions to achieve complete coverage of existing API only."""
 
 import pytest
 
-from core.exceptions import ConfigurationError, ElementNotFoundError, ScrapingError, TimeoutError
+# Import only the exceptions that actually exist in core.exceptions
+from core.exceptions import (
+    ElementNotFoundError,
+    ScrapingError,
+    TimeoutError,
+)
 
 
 @pytest.mark.unit
@@ -13,7 +18,7 @@ class TestExceptions:
         err1 = ElementNotFoundError("Element not found")
         assert str(err1) == "Element not found"
 
-        # With locator info
+        # With locator info (string content check only)
         err2 = ElementNotFoundError("Element not found: //div[@id='test']")
         assert "//div[@id='test']" in str(err2)
 
@@ -26,7 +31,7 @@ class TestExceptions:
             assert str(err3.__cause__) == "Original cause"
 
     def test_timeout_error_construction(self):
-        """Test TimeoutError with timeout information."""
+        """Test TimeoutError with timeout information and chaining."""
         # With timeout seconds
         err1 = TimeoutError("Operation timed out", timeout_sec=30)
         assert "Operation timed out" in str(err1)
@@ -43,14 +48,10 @@ class TestExceptions:
             assert err3.__cause__ is not None
             assert str(err3.__cause__) == "Selenium timeout"
 
-    def test_scraping_error_construction(self):
-        """Test ScrapingError construction."""
+    def test_scraping_error_construction_and_chaining(self):
+        """Test ScrapingError construction and optional chaining."""
         err1 = ScrapingError("Failed to scrape data")
         assert str(err1) == "Failed to scrape data"
-
-        # With site context
-        err2 = ScrapingError("Failed to scrape from example.com")
-        assert "example.com" in str(err2)
 
         # Optional chaining example
         try:
@@ -60,18 +61,8 @@ class TestExceptions:
             assert err.__cause__ is not None
             assert isinstance(err.__cause__, ValueError)
 
-    def test_configuration_error_construction(self):
-        """Test ConfigurationError construction."""
-        err1 = ConfigurationError("Invalid config")
-        assert str(err1) == "Invalid config"
-
-        # With field context
-        err2 = ConfigurationError("Missing required field: base_url")
-        assert "base_url" in str(err2)
-
-    def test_all_exceptions_inherit_properly(self):
-        """Test inheritance hierarchy."""
+    def test_inheritance(self):
+        """Test inheritance hierarchy among existing exception classes."""
         assert issubclass(ElementNotFoundError, ScrapingError)
         assert issubclass(TimeoutError, ScrapingError)
-        assert issubclass(ConfigurationError, Exception)
         assert issubclass(ScrapingError, Exception)
