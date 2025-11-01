@@ -1,7 +1,8 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: selenium-automation
+  name: scrapeme
   labels:
-    name: selenium-automation
+    name: scrapeme
     env: production
+    app: scrapeme
