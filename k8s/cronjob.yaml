@@ -1,10 +1,10 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: selenium-automation-scheduled
-  namespace: selenium-automation
+  name: scrapeme-scheduled
+  namespace: scrapeme
 spec:
-  schedule: "0 */6 * * *"  # Every 6 hours
+  schedule: "0 */6 * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 1
@@ -14,18 +14,15 @@ spec:
       template:
         metadata:
           labels:
-            app: selenium-automation
+            app: scrapeme
             job-type: scheduled
         spec:
           restartPolicy: OnFailure
-          serviceAccountName: selenium-automation
-          
+          serviceAccountName: scrapeme-automation
           containers:
-          - name: selenium-automation
-            image: ghcr.io/yonatan895/selenium-automation:2.0.0
-            command:
-            - python
-            - runner.py
+          - name: scrapeme
+            image: ghcr.io/yonatan895/scrapeme:latest
+            args:
             - --config
             - /config/sites.yaml
             - --browser
@@ -33,21 +30,18 @@ spec:
             - --headless
             - --out
             - /artifacts/results-$(date +%Y%m%d-%H%M%S).json
-            
             envFrom:
             - secretRef:
-                name: selenium-secrets
-            
+                name: scrapeme-secrets
             volumeMounts:
             - name: config
               mountPath: /config
             - name: artifacts
               mountPath: /artifacts
-          
           volumes:
           - name: config
             configMap:
-              name: selenium-config
+              name: scrapeme-config
           - name: artifacts
             persistentVolumeClaim:
-              claimName: selenium-artifacts
+              claimName: scrapeme-artifacts
