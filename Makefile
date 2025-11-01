@@ -29,7 +29,7 @@ VENV := .venv
 UV := uv
 PYTEST := $(VENV_BIN)/pytest
 BLACK := $(VENV_BIN)/black
-ISROT := $(VENV_BIN)/isort
+ISORT := $(VENV_BIN)/isort
 MYPY := $(VENV_BIN)/mypy
 PYLINT := $(VENV_BIN)/pylint
 BANDIT := $(VENV_BIN)/bandit
@@ -258,16 +258,16 @@ load-run: load-test-health ## Alias for quick load testing
 # --- Quality ---
 
 lint: venv ## Run code quality checks
-	@if [ ! -x "$(BLACK)" ] || [ ! -x "$(ISROT)" ] || [ ! -x "$(MYPY)" ] || [ ! -x "$(PYLINT)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
+	@if [ ! -x "$(BLACK)" ] || [ ! -x "$(ISORT)" ] || [ ! -x "$(MYPY)" ] || [ ! -x "$(PYLINT)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
 	$(BLACK) --check --diff core/ config/ infra/ tests/ runner.py
-	$(ISROT) --check-only --diff core/ config/ infra/ tests/ runner.py
+	$(ISORT) --check-only --diff core/ config/ infra/ tests/ runner.py
 	$(MYPY) core/ config/ infra/ runner.py --explicit-package-bases --strict --show-error-codes
 	$(PYLINT) core/ config/ infra/ runner.py --fail-under=8.5
 
 format: venv ## Auto-format code
-	@if [ ! -x "$(BLACK)" ] || [ ! -x "$(ISROT)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
+	@if [ ! -x "$(BLACK)" ] || [ ! -x "$(ISORT)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
 	$(BLACK) core/ config/ infra/ tests/ runner.py
-	$(ISROT) core/ config/ infra/ tests/ runner.py
+	$(ISORT) core/ config/ infra/ tests/ runner.py
 
 type-check: venv ## Type checking report
 	@if [ ! -x "$(MYPY)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
