@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: selenium-automation
-  namespace: selenium-automation
+  name: scrapeme-automation
+  namespace: scrapeme
   labels:
-    app: selenium-automation
+    app: scrapeme
     version: v2.0.0
 spec:
   replicas: 3
@@ -15,31 +15,27 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app: selenium-automation
+      app: scrapeme
   template:
     metadata:
       labels:
-        app: selenium-automation
+        app: scrapeme
         version: v2.0.0
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9090"
         prometheus.io/path: "/metrics"
     spec:
-      serviceAccountName: selenium-automation
+      serviceAccountName: scrapeme-automation
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
-      
       containers:
-      - name: selenium-automation
-        image: ghcr.io/yonatan895/selenium-automation:2.0.0
+      - name: scrapeme
+        image: ghcr.io/yonatan895/scrapeme:latest
         imagePullPolicy: Always
-        
-        command:
-        - python
-        - runner.py
+        args:
         - --config
         - /config/sites.yaml
         - --browser
@@ -49,24 +45,22 @@ spec:
         - --metrics-port
         - "9090"
         - --json-logs
-        
+        - --daemon
         env:
         - name: SITE_USERNAME
           valueFrom:
             secretKeyRef:
-              name: selenium-secrets
+              name: scrapeme-secrets
               key: SITE_USERNAME
         - name: SITE_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: selenium-secrets
+              name: scrapeme-secrets
               key: SITE_PASSWORD
-        
         ports:
         - name: metrics
           containerPort: 9090
           protocol: TCP
-        
         resources:
           requests:
             memory: "512Mi"
@@ -74,7 +68,6 @@ spec:
           limits:
             memory: "2Gi"
             cpu: "2000m"
-        
         volumeMounts:
         - name: config
           mountPath: /config
@@ -83,7 +76,6 @@ spec:
           mountPath: /app/artifacts
         - name: tmp
           mountPath: /tmp
-        
         livenessProbe:
           httpGet:
             path: /healthz
@@ -92,7 +84,6 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
-        
         readinessProbe:
           httpGet:
             path: /ready
@@ -101,24 +92,21 @@ spec:
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 2
-        
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
           capabilities:
             drop:
             - ALL
-      
       volumes:
       - name: config
         configMap:
-          name: selenium-config
+          name: scrapeme-config
       - name: artifacts
         persistentVolumeClaim:
-          claimName: selenium-artifacts
+          claimName: scrapeme-artifacts
       - name: tmp
         emptyDir: {}
-      
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -126,5 +114,5 @@ spec:
             podAffinityTerm:
               labelSelector:
                 matchLabels:
-                  app: selenium-automation
+                  app: scrapeme
               topologyKey: kubernetes.io/hostname
