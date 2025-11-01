@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  labels:
+    app: alertmanager
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9093"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+      containers:
+      - name: alertmanager
+        image: prom/alertmanager:latest
+        args:
+        - '--config.file=/etc/alertmanager/alertmanager.yml'
+        - '--storage.path=/alertmanager'
+        - '--web.external-url=http://localhost:9093'
+        - '--log.level=info'
+        ports:
+        - name: alertmanager
+          containerPort: 9093
+        volumeMounts:
+        - name: config
+          mountPath: /etc/alertmanager
+          readOnly: true
+        - name: storage
+          mountPath: /alertmanager
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9093
+          initialDelaySeconds: 30
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9093
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: config
+        configMap:
+          name: alertmanager-config
+      - name: storage
+        emptyDir:
+          sizeLimit: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  labels:
+    app: alertmanager
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9093"
+spec:
+  selector:
+    app: alertmanager
+  ports:
+  - name: alertmanager
+    port: 9093
+    targetPort: 9093
+  type: ClusterIP
