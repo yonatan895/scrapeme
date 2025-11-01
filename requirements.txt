@@ -14,6 +14,8 @@ idna==3.11
     # via trio
 lxml==6.0.2
     # via scrapeme (pyproject.toml)
+orjson==3.11.4
+    # via scrapeme (pyproject.toml)
 outcome==1.3.0.post0
     # via
     #   trio
