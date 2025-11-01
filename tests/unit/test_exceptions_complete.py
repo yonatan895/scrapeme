@@ -2,12 +2,7 @@
 
 import pytest
 
-from core.exceptions import (
-    ConfigurationError,
-    ElementNotFoundError,
-    ScrapingError,
-    TimeoutError,
-)
+from core.exceptions import ConfigurationError, ElementNotFoundError, ScrapingError, TimeoutError
 
 
 @pytest.mark.unit
