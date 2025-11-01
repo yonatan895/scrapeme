@@ -1,0 +1,55 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: scrapeme-base
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+namespace: scrapeme
+
+resources:
+  # Core infrastructure
+  - namespace.yaml
+  - configmaps.yaml
+  - secrets.yaml
+  - storage.yaml
+  
+  # Application components
+  - scrapeme/
+  - selenium/
+  - monitoring/
+  
+  # Security policies
+  - network-policies.yaml
+
+commonLabels:
+  app.kubernetes.io/name: scrapeme
+  app.kubernetes.io/part-of: scrapeme-platform
+  app.kubernetes.io/managed-by: kustomize
+
+commonAnnotations:
+  config.kubernetes.io/origin: |
+    path: k8s/base
+    repo: https://github.com/yonatan895/scrapeme
+
+images:
+  - name: scrapeme
+    newName: ghcr.io/yonatan895/scrapeme
+    newTag: latest
+
+replicas:
+  - name: scrapeme-app
+    count: 2
+  - name: selenium-chrome
+    count: 2
+
+patches:
+  # Environment-specific patches will be applied in overlays
+  - target:
+      kind: Deployment
+      name: scrapeme-app
+    patch: |
+      - op: add
+        path: /spec/template/metadata/labels/version
+        value: v2.0.0

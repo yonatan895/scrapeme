@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: scrapeme-app
+  labels:
+    app: scrapeme
+    component: scraper
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+spec:
+  selector:
+    app: scrapeme
+    component: scraper
+  ports:
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  type: ClusterIP
