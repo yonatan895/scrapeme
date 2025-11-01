@@ -18,7 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 
-# Core dependencies
+# Core dependencies (runtime)
 dependencies = [
     "selenium>=4.15.0,<5.0.0",
     "tenacity>=9.1.2",
@@ -28,6 +28,7 @@ dependencies = [
     "cachetools>=6.2.1",
     "psutil>=7.1.1,<8.0",
     "lxml>=6.0.2",
+    "orjson>=3.9.0",  # High-performance JSON encoder/decoder for all clients
 ]
 
 # Optional dependency groups
@@ -55,10 +56,8 @@ bench = [
 ]
 
 parallel = [
-    "pytest-xdist>=3.3.0,<4.0.0",  
+    "pytest-xdist>=3.3.0,<4.0.0",
 ]
-
-
 
 # Code quality
 lint = [
@@ -75,7 +74,7 @@ security = [
     "safety>=3.6.2",
 ]
 
-# Load testing
+# Load testing (lock brotli across project via load extras)
 load = [
     "locust>=2.20.0,<3.0.0",
     "brotli==1.1.0",
@@ -98,7 +97,6 @@ selenium-automation = "runner:main"
 
 [project.urls]
 Homepage = "https://github.com/yonatan895"
-
 
 # Hatchling build configuration
 [tool.hatch.build.targets.wheel]
