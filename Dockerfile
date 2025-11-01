@@ -52,9 +52,9 @@ ENTRYPOINT ["python", "runner.py"]
 FROM deps-builder AS dev
 WORKDIR /app
 COPY . .
-# Optional: use uv for faster editable installs (no wheel usage)
+# Use uv to install into system environment inside the container
 RUN pip install uv && \
-    UV_LINK_MODE=copy uv pip install -e ".[dev,lint,security,load,docs]"
+    UV_LINK_MODE=copy uv pip install --system -e ".[dev,lint,security,load,docs]"
 
 ############################
 # Test image
