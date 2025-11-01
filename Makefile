@@ -1,4 +1,4 @@
-.PHONY: help venv install install-dev install-all sync upgrade compile-requirements \
+.PHONY: help venv venv-clear install install-dev install-all sync upgrade compile-requirements \
         test test-unit test-integration test-e2e test-property test-load test-chaos test-all \
         lint format type-check security-check benchmark clean clean-all \
         docker-build docker-build-dev docker-test docker-push docker-run docker-scan docker-prepare docker-shell docker-clean \
@@ -65,10 +65,20 @@ help: ## Show help
 check-uv: ## Ensure UV is installed
 	@command -v $(UV) >/dev/null 2>&1 || { echo "Install UV: https://astral.sh/uv"; exit 1; }
 
-venv: check-uv ## Create virtual environment via UV
-	@if [ -d "$(VENV)" ]; then echo "$(YELLOW)venv exists$(NC)"; exit 0; fi
-	$(UV) venv
-	@echo "$(GREEN)venv created$(NC)"
+# Create venv only if missing (no prompt)
+venv: ## Create virtual environment if it doesn't exist
+	@if [ -d "$(VENV)" ]; then \
+		echo "$(YELLOW)venv exists$(NC)"; \
+	else \
+		$(UV) venv; \
+		echo "$(GREEN)venv created$(NC)"; \
+	fi
+
+# Explicit venv recreation (no prompt)
+venv-clear: ## Recreate virtual environment (destructive)
+	@echo "$(YELLOW)Recreating venv...$(NC)"
+	UV_VENV_CLEAR=1 $(UV) venv --clear
+	@echo "$(GREEN)venv recreated$(NC)"
 
 install: check-uv venv ## Install prod deps
 	$(UV) pip install -e .
@@ -137,7 +147,7 @@ security-check: venv ## Security scans (bandit + safety)
 	$(BANDIT) -r core/ config/ infra/ runner.py -ll -f json -o bandit-report.json || true
 	$(SAFETY) check --json --output safety-report.json --continue-on-error || true
 
-# --- Docker & Compose (unchanged compose-up kept) ---
+# --- Docker & Compose ---
 
 compose-up: ## Start full stack (Selenium Grid + Monitoring)
 	$(DOCKER_COMPOSE) -f docker-compose.production.yaml up -d
@@ -167,7 +177,7 @@ load-run: venv ## Headless Locust (USERS, SPAWN, DURATION, LOAD_BASE_URL)
 
 # --- Shortcuts ---
 
-quickstart: venv install-all verify-install ## Complete setup
+quickstart: check-uv venv install-all verify-install ## Complete setup (no venv prompt)
 	@echo "$(GREEN)Quickstart complete$(NC)"
 
 dev: install-all pre-commit-install ## Setup dev env
