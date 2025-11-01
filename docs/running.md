@@ -1,12 +1,8 @@
-# Running & CLI
-
-The entry point is runner.py with an ergonomic CLI.
+# Running 
+Run using compose:
 
 ```bash
-python runner.py --config config/sites.yaml \
-  --browser chrome --headless \
-  --out results.json --json-logs \
-  --max-workers 4 --enable-pooling
+make compose-up
 ```
 
 Important flags:
