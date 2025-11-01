@@ -1,0 +1,31 @@
+# Docker context hygiene
+.venv
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+results/
+artifacts/
+profiles/
+dist/
+build/
+wheels/
+.coverage
+coverage.xml
+mypy-report/
+benchmark.json
+bandit-report.json
+safety-report.json
+node_modules/
+.git/
+.gitignore
+.github/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# OS cruft
+.DS_Store
+Thumbs.db
