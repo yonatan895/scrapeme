@@ -6,7 +6,7 @@ This docs/ folder provides practical, concise guides for day‑to‑day use. Kee
 - Configuration: docs/configuration.md
 - Running & CLI: docs/running.md
 - Development: docs/development.md
-- Testing & QA: docs/testing.md
+- Testing & QA: docs/testing.md (now includes the full list of load‑testing Makefile targets and defaults)
 - Docker: docs/docker.md
 - Observability & Health: docs/observability.md
 - Architecture: docs/architecture.md
