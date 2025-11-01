@@ -6,6 +6,7 @@ import os
 
 import pytest
 from selenium import webdriver
+from urllib.parse import urlparse
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -65,7 +66,9 @@ def test_basic_selenium_grid_connectivity(chrome_remote_driver):
     driver = chrome_remote_driver
 
     driver.get("https://httpbin.org/status/200")
-    assert "httpbin.org" in driver.current_url
+    parsed = urlparse(driver.current_url)
+    # Check if the hostname is httpbin.org (no substring check)
+    assert parsed.hostname == "httpbin.org"
 
     # Page source accessible
     page_source = driver.page_source
