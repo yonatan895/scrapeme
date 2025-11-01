@@ -46,5 +46,5 @@ def loads(data: bytes | str) -> Any:
             return _orjson.loads(data)
         return _stdlib_json.loads(data.decode("utf-8"))
     if HAS_ORJSON and _orjson is not None:
-        return _orjson.loads(data)  # type: ignore[arg-type]
+        return _orjson.loads(data)
     return _stdlib_json.loads(data)
