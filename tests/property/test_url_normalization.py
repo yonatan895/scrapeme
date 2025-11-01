@@ -77,18 +77,20 @@ class TestURLNormalizationProperties:
 
     @given(valid_urls(), url_safe_params())
     def test_query_params_preserved(self, base_url: str, params: dict):
-        """Query parameters should be preserved after normalization."""
-        from urllib.parse import parse_qs, urlencode, urlparse
+        """Query parameter keys should be preserved after normalization, including empty values."""
+        from urllib.parse import parse_qsl, urlencode, urlparse
 
-        # Remove existing query to avoid collisions
         if "?" in base_url:
             base_url = base_url.split("?")[0]
 
-        url_with_params = f"{base_url}?{urlencode(params)}"
+        pairs = list(params.items())
+        url_with_params = f"{base_url}?{urlencode(pairs, doseq=True)}"
         normalized = normalize_url(url_with_params)
 
-        parsed_url = urlparse(normalized)
-        query_params = parse_qs(parsed_url.query)
+        parsed = urlparse(normalized)
+        parsed_pairs = parse_qsl(parsed.query, keep_blank_values=True)
 
-        for key in params:
-            assert key in query_params, f"Key '{key}' missing from query params {query_params}"
+        original_keys = {k for k, _ in pairs}
+        parsed_keys = {k for k, _ in parsed_pairs}
+        missing = original_keys - parsed_keys
+        assert not missing, f"Missing keys after normalization: {missing}; parsed={parsed_pairs}"
