@@ -3,7 +3,6 @@
 import pytest
 
 from core.exceptions import (
-    AuthenticationError,
     ConfigurationError,
     ElementNotFoundError,
     ScrapingError,
@@ -75,19 +74,9 @@ class TestExceptions:
         err2 = ConfigurationError("Missing required field: base_url")
         assert "base_url" in str(err2)
 
-    def test_authentication_error_construction(self):
-        """Test AuthenticationError construction."""
-        err1 = AuthenticationError("Login failed")
-        assert str(err1) == "Login failed"
-
-        # With credential context
-        err2 = AuthenticationError("Invalid credentials for user: testuser")
-        assert "testuser" in str(err2)
-
     def test_all_exceptions_inherit_properly(self):
         """Test inheritance hierarchy."""
         assert issubclass(ElementNotFoundError, ScrapingError)
         assert issubclass(TimeoutError, ScrapingError)
         assert issubclass(ConfigurationError, Exception)
-        assert issubclass(AuthenticationError, ScrapingError)
         assert issubclass(ScrapingError, Exception)
