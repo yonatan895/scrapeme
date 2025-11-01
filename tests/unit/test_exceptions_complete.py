@@ -1,15 +1,15 @@
-"""Unit tests for core.exceptions to achieve complete coverage of existing API only."""
+"""Unit tests for core.exceptions: cover existing exception classes only."""
 
 import pytest
 
-# Import only the exceptions that actually exist in core.exceptions
-from core.exceptions import ElementNotFoundError, ScrapingError, TimeoutError
+# Import only names that actually exist in core.exceptions (no ScrapingError)
+from core.exceptions import ElementNotFoundError, TimeoutError
 
 
 @pytest.mark.unit
 class TestExceptions:
     def test_element_not_found_error_construction(self):
-        """Test ElementNotFoundError with various arguments."""
+        """Test ElementNotFoundError with various arguments and chaining."""
         # Basic message
         err1 = ElementNotFoundError("Element not found")
         assert str(err1) == "Element not found"
@@ -44,21 +44,7 @@ class TestExceptions:
             assert err3.__cause__ is not None
             assert str(err3.__cause__) == "Selenium timeout"
 
-    def test_scraping_error_construction_and_chaining(self):
-        """Test ScrapingError construction and optional chaining."""
-        err1 = ScrapingError("Failed to scrape data")
-        assert str(err1) == "Failed to scrape data"
-
-        # Optional chaining example
-        try:
-            cause = ValueError("Bad data")
-            raise ScrapingError("Failed to scrape") from cause
-        except ScrapingError as err:
-            assert err.__cause__ is not None
-            assert isinstance(err.__cause__, ValueError)
-
     def test_inheritance(self):
         """Test inheritance hierarchy among existing exception classes."""
-        assert issubclass(ElementNotFoundError, ScrapingError)
-        assert issubclass(TimeoutError, ScrapingError)
-        assert issubclass(ScrapingError, Exception)
+        assert issubclass(ElementNotFoundError, Exception)
+        assert issubclass(TimeoutError, Exception)
