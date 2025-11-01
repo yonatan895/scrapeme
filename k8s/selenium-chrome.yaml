@@ -1,0 +1,238 @@
+# Chrome node workers deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: selenium-chrome
+  namespace: scrapeme
+  labels:
+    app.kubernetes.io/name: selenium-chrome
+    app.kubernetes.io/component: selenium-grid
+    app.kubernetes.io/part-of: scrapeme
+spec:
+  replicas: 2  # Start with 2 Chrome nodes, can be scaled
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 2
+  selector:
+    matchLabels:
+      app: selenium-chrome
+  template:
+    metadata:
+      labels:
+        app: selenium-chrome
+        app.kubernetes.io/name: selenium-chrome
+        app.kubernetes.io/component: selenium-grid
+      annotations:
+        prometheus.io/scrape: "false"  # Chrome nodes don't expose metrics by default
+    spec:
+      serviceAccountName: scrapeme-app
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1200  # selenium user in the image
+        runAsGroup: 1201
+        fsGroup: 1201
+      containers:
+      - name: chrome
+        image: selenium/node-chrome:4.15.0
+        ports:
+        - name: node
+          containerPort: 5555
+          protocol: TCP
+        env:
+        # Hub connection settings
+        - name: SE_EVENT_BUS_HOST
+          value: selenium-hub
+        - name: SE_EVENT_BUS_PUBLISH_PORT
+          value: "4442"
+        - name: SE_EVENT_BUS_SUBSCRIBE_PORT
+          value: "4443"
+        # Node configuration
+        - name: SE_NODE_MAX_SESSIONS
+          value: "3"  # Max concurrent sessions per node
+        - name: SE_NODE_SESSION_TIMEOUT
+          value: "300"
+        - name: SE_NODE_OVERRIDE_MAX_SESSIONS
+          value: "true"
+        # Chrome-specific settings
+        - name: SE_START_XVFB
+          value: "true"
+        - name: SE_SCREEN_WIDTH
+          value: "1920"
+        - name: SE_SCREEN_HEIGHT
+          value: "1080"
+        - name: SE_SCREEN_DEPTH
+          value: "24"
+        - name: SE_VNC_NO_PASSWORD
+          value: "true"
+        # Performance tuning
+        - name: SE_NODE_HEARTBEAT_PERIOD
+          value: "30000"
+        - name: SE_LOG_LEVEL
+          value: "INFO"
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /status
+            port: 5555
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /status
+            port: 5555
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+        # Resource allocation (important for browser performance)
+        resources:
+          requests:
+            memory: "2Gi"  # Minimum memory for Chrome
+            cpu: "1000m"   # Minimum CPU for browser rendering
+          limits:
+            memory: "4Gi"  # Generous limit for browser + multiple tabs
+            cpu: "2000m"   # Allow burst CPU usage
+        # Volume mounts for browser data
+        volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+        - name: tmp
+          mountPath: /tmp
+        # Security context for browser process
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      # Shared memory for Chrome (critical for performance)
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 2Gi  # Chrome needs generous /dev/shm
+      - name: tmp
+        emptyDir:
+          sizeLimit: 1Gi
+      # Pod scheduling and placement
+      affinity:
+        # Prefer to spread Chrome nodes across different nodes
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - selenium-chrome
+              topologyKey: kubernetes.io/hostname
+        # Prefer nodes with more resources
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            preference:
+              matchExpressions:
+              - key: node-type
+                operator: In
+                values:
+                - compute-optimized
+      # Tolerations for dedicated selenium nodes (optional)
+      # tolerations:
+      # - key: selenium
+      #   operator: Equal
+      #   value: "true"
+      #   effect: NoSchedule
+      # DNS configuration for better resolution
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "2"
+        - name: edns0
+
+---
+# Service for Chrome nodes (mainly for debugging/monitoring)
+apiVersion: v1
+kind: Service
+metadata:
+  name: selenium-chrome
+  namespace: scrapeme
+  labels:
+    app.kubernetes.io/name: selenium-chrome
+    app.kubernetes.io/component: selenium-grid
+spec:
+  selector:
+    app: selenium-chrome
+  ports:
+  - name: node
+    port: 5555
+    targetPort: 5555
+    protocol: TCP
+  type: ClusterIP
+  clusterIP: None  # Headless service for direct pod access if needed
+
+---
+# Pod Disruption Budget for Chrome nodes
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: selenium-chrome-pdb
+  namespace: scrapeme
+  labels:
+    app.kubernetes.io/name: selenium-chrome
+    app.kubernetes.io/component: selenium-grid
+spec:
+  minAvailable: 1  # Ensure at least 1 Chrome node is always available
+  selector:
+    matchLabels:
+      app: selenium-chrome
+
+---
+# HPA for Chrome nodes (scale based on CPU utilization)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: selenium-chrome-hpa
+  namespace: scrapeme
+  labels:
+    app.kubernetes.io/name: selenium-chrome
+    app.kubernetes.io/component: selenium-grid
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: selenium-chrome
+  minReplicas: 2
+  maxReplicas: 8  # Adjust based on cluster capacity
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70  # Scale when average CPU > 70%
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Scale when average memory > 80%
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Wait 5 min before scaling down
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 60

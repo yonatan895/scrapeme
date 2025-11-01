@@ -1,0 +1,164 @@
+# Selenium Grid Hub deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: selenium-hub
+  namespace: scrapeme
+  labels:
+    app.kubernetes.io/name: selenium-hub
+    app.kubernetes.io/component: selenium-grid
+    app.kubernetes.io/part-of: scrapeme
+spec:
+  replicas: 1  # Hub should be singleton
+  strategy:
+    type: Recreate  # Avoid multiple hubs running simultaneously
+  selector:
+    matchLabels:
+      app: selenium-hub
+  template:
+    metadata:
+      labels:
+        app: selenium-hub
+        app.kubernetes.io/name: selenium-hub
+        app.kubernetes.io/component: selenium-grid
+      annotations:
+        prometheus.io/scrape: "false"  # Hub doesn't expose Prometheus metrics by default
+    spec:
+      serviceAccountName: scrapeme-app
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1200  # selenium user in the image
+        runAsGroup: 1201
+        fsGroup: 1201
+      containers:
+      - name: selenium-hub
+        image: selenium/hub:4.15.0
+        ports:
+        - name: hub
+          containerPort: 4444
+          protocol: TCP
+        - name: publish
+          containerPort: 4442
+          protocol: TCP
+        - name: subscribe
+          containerPort: 4443
+          protocol: TCP
+        env:
+        - name: SE_SESSION_REQUEST_TIMEOUT
+          value: "300"
+        - name: SE_NODE_MAX_SESSIONS
+          value: "5"
+        - name: SE_SESSION_RETRY_INTERVAL
+          value: "5"
+        - name: SE_RELAX_CHECKS
+          value: "true"
+        - name: SE_LOG_LEVEL
+          value: "INFO"
+        # Health check configuration
+        livenessProbe:
+          httpGet:
+            path: /status
+            port: 4444
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /status
+            port: 4444
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        # Resource management
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        # Volume mounts for temporary data
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: dev-shm
+          mountPath: /dev/shm
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 1Gi
+      - name: dev-shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 1Gi
+      # Scheduling preferences
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - selenium-hub
+              topologyKey: kubernetes.io/hostname
+      # Tolerations for dedicated selenium nodes (optional)
+      # tolerations:
+      # - key: selenium
+      #   operator: Equal
+      #   value: "true"
+      #   effect: NoSchedule
+
+---
+# Service for Selenium Hub
+apiVersion: v1
+kind: Service
+metadata:
+  name: selenium-hub
+  namespace: scrapeme
+  labels:
+    app.kubernetes.io/name: selenium-hub
+    app.kubernetes.io/component: selenium-grid
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb  # For AWS
+    # service.beta.kubernetes.io/azure-load-balancer-internal: "true"  # For Azure internal LB
+spec:
+  selector:
+    app: selenium-hub
+  ports:
+  - name: hub
+    port: 4444
+    targetPort: 4444
+    protocol: TCP
+  - name: publish
+    port: 4442
+    targetPort: 4442
+    protocol: TCP
+  - name: subscribe
+    port: 4443
+    targetPort: 4443
+    protocol: TCP
+  type: ClusterIP
+  # Uncomment for external access (not recommended for production)
+  # type: LoadBalancer
+  sessionAffinity: None
+
+---
+# Pod Disruption Budget for Selenium Hub
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: selenium-hub-pdb
+  namespace: scrapeme
+  labels:
+    app.kubernetes.io/name: selenium-hub
+    app.kubernetes.io/component: selenium-grid
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: selenium-hub
