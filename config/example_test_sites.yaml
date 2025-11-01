@@ -1,0 +1,13 @@
+sites:
+  - name: httpbin_example
+    base_url: "https://httpbin.org"
+    wait_timeout_sec: 10
+    page_load_timeout_sec: 20
+
+    steps:
+      - name: get_html
+        goto_url: "/html"
+        wait_xpath: "//h1"
+        fields:
+          - name: title
+            xpath: "//h1"
