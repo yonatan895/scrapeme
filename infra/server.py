@@ -33,7 +33,13 @@ class HealthzResponse(TypedDict):
     timestamp: str
 
 
-JsonResponse = Union[ReadyResponse, HealthzResponse]
+class ErrorResponse(TypedDict):
+    error: str
+    code: int
+    timestamp: str
+
+
+JsonResponse = Union[ReadyResponse, HealthzResponse, ErrorResponse]
 
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -56,8 +62,8 @@ class HealthHandler(BaseHTTPRequestHandler):
 
     def _handle_healthz(self) -> None:
         """Handle liveness probe - always healthy if server is responding."""
-        response: HealthzResponse = {"status": "healthy", "timestamp": self._get_timestamp()}
-        self._send_json_response(HTTPStatus.OK, response)
+        healthz: HealthzResponse = {"status": "healthy", "timestamp": self._get_timestamp()}
+        self._send_json_response(HTTPStatus.OK, healthz)
 
     def _handle_ready(self) -> None:
         """Handle readiness probe - check all registered health checks."""
@@ -65,15 +71,15 @@ class HealthHandler(BaseHTTPRequestHandler):
 
         if not results:
             # No health checks registered - consider ready
-            response: ReadyResponse = {"status": "ready", "timestamp": self._get_timestamp()}
-            self._send_json_response(HTTPStatus.OK, response)
+            ready_min: ReadyResponse = {"status": "ready", "timestamp": self._get_timestamp()}
+            self._send_json_response(HTTPStatus.OK, ready_min)
             return
 
         # Check if all health checks pass
         all_healthy = all(r.status == HealthStatus.HEALTHY for r in results.values())
         status_code = HTTPStatus.OK if all_healthy else HTTPStatus.SERVICE_UNAVAILABLE
 
-        response: ReadyResponse = {
+        ready_full: ReadyResponse = {
             "status": "ready" if all_healthy else "not_ready",
             "timestamp": self._get_timestamp(),
             "checks": {
@@ -86,7 +92,7 @@ class HealthHandler(BaseHTTPRequestHandler):
             },
         }
 
-        self._send_json_response(status_code, response)
+        self._send_json_response(status_code, ready_full)
 
     def _handle_metrics(self) -> None:
         """Handle Prometheus metrics endpoint."""
@@ -114,15 +120,12 @@ class HealthHandler(BaseHTTPRequestHandler):
 
     def _send_error(self, status_code: HTTPStatus, message: str) -> None:
         """Send error response."""
-        response: HealthzResponse = {
-            "error": message,  # type: ignore[typeddict-item]
-            "code": str(status_code.value),  # type: ignore[typeddict-item]
+        err: ErrorResponse = {
+            "error": message,
+            "code": status_code.value,
             "timestamp": self._get_timestamp(),
-        }  # Using ignore because HealthzResponse is strictly typed; errors are rare path
-        # For strict typing, we can instead build a plain dict[str, Any]:
-        # err: dict[str, Any] = {"error": message, "code": status_code.value, "timestamp": self._get_timestamp()}
-        # and pass as JsonResponse via cast.
-        self._send_json_response(status_code, response)  # type: ignore[arg-type]
+        }
+        self._send_json_response(status_code, err)
 
     def _get_timestamp(self) -> str:
         """Get current timestamp in ISO format."""
