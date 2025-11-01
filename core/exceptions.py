@@ -42,16 +42,24 @@ class ExtractionError(Exception):
 
 # Domain-specific higher-level errors referenced across modules
 class ConfigError(Exception):
-    pass
+    def __init__(self, message: str, *, context: ErrorContext | None = None) -> None:
+        super().__init__(message)
+        self.context = context
 
 
 class FrameError(Exception):
-    pass
+    def __init__(self, message: str, *, context: ErrorContext | None = None) -> None:
+        super().__init__(message)
+        self.context = context
 
 
 class LoginError(Exception):
-    pass
+    def __init__(self, message: str, *, context: ErrorContext | None = None) -> None:
+        super().__init__(message)
+        self.context = context
 
 
 class AutomationError(Exception):
-    pass
+    def __init__(self, message: str, *, context: ErrorContext | None = None) -> None:
+        super().__init__(message)
+        self.context = context
