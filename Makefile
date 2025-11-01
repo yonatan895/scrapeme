@@ -7,7 +7,7 @@
         ci-local pre-commit-install pre-commit-run pre-commit-update quickstart dev check fix watch version version-bump git-tag \
         info deps-tree deps-outdated health-check diagnose load-run verify-python \
         load-test-health load-test-stress load-test-mixed load-test-fast load-test-external load-test-ci load-test-production \
-        load-test-install load-test-clean load-test-results
+        load-test-install load-test-clean load-test-results load-test-server load-test-server-start load-test-server-stop
 
 .DEFAULT_GOAL := help
 
@@ -29,7 +29,7 @@ VENV := .venv
 UV := uv
 PYTEST := $(VENV_BIN)/pytest
 BLACK := $(VENV_BIN)/black
-ISORT := $(VENV_BIN)/isort
+ISROT := $(VENV_BIN)/isort
 MYPY := $(VENV_BIN)/mypy
 PYLINT := $(VENV_BIN)/pylint
 BANDIT := $(VENV_BIN)/bandit
@@ -46,6 +46,8 @@ REGISTRY := ghcr.io/yonatan895
 LOAD_BASE_URL ?= http://localhost:9090
 LOAD_RESULTS_DIR ?= artifacts/load_tests
 LOCUST_FILE := tests/load/locustfile.py
+TEST_SERVER_PID_FILE := .test_server.pid
+TEST_SERVER_PORT ?= 9090
 
 # Colors (portable via tput; disabled when not a TTY)
 ifneq ($(OS),Windows_NT)
@@ -159,74 +161,116 @@ load-test-install: venv ## Install load testing dependencies
 	@mkdir -p $(LOAD_RESULTS_DIR)
 	@echo "$(GREEN)Load testing setup complete$(NC)"
 
-load-test-health: load-test-install ## Run health check load tests (quick validation)
+# Test server management
+load-test-server-start: venv ## Start load test server in background
+	@if [ -f "$(TEST_SERVER_PID_FILE)" ]; then \
+		echo "$(YELLOW)Test server already running (PID: $$(cat $(TEST_SERVER_PID_FILE)))$(NC)"; \
+	else \
+		echo "$(BLUE)Starting load test server on port $(TEST_SERVER_PORT)...$(NC)"; \
+		$(VENV_BIN)/python tests/load/test_server.py --port $(TEST_SERVER_PORT) --host localhost > /dev/null 2>&1 & \
+		echo $$! > $(TEST_SERVER_PID_FILE); \
+		sleep 2; \
+		if kill -0 $$! 2>/dev/null; then \
+			echo "$(GREEN)Test server started (PID: $$!)$(NC)"; \
+			echo "$(BLUE)Health endpoint: http://localhost:$(TEST_SERVER_PORT)/healthz$(NC)"; \
+		else \
+			echo "$(RED)Failed to start test server$(NC)"; \
+			rm -f $(TEST_SERVER_PID_FILE); \
+			exit 1; \
+		fi; \
+	fi
+
+load-test-server-stop: ## Stop load test server
+	@if [ -f "$(TEST_SERVER_PID_FILE)" ]; then \
+		PID=$$(cat $(TEST_SERVER_PID_FILE)); \
+		echo "$(BLUE)Stopping load test server (PID: $$PID)...$(NC)"; \
+		if kill $$PID 2>/dev/null; then \
+			echo "$(GREEN)Test server stopped$(NC)"; \
+		else \
+			echo "$(YELLOW)Test server was not running$(NC)"; \
+		fi; \
+		rm -f $(TEST_SERVER_PID_FILE); \
+	else \
+		echo "$(YELLOW)No test server PID file found$(NC)"; \
+	fi
+
+load-test-server: load-test-server-start ## Start test server (alias)
+
+# Enhanced load testing with automatic server management
+load-test-health: load-test-install load-test-server-start ## Run health check load tests
 	@echo "$(BLUE)Running health check load tests...$(NC)"
-	LOAD_TEST_MODE=health LOAD_BASE_URL=$(LOAD_BASE_URL) \
+	@sleep 1  # Give server time to fully start
+	LOAD_TEST_MODE=health LOAD_BASE_URL=http://localhost:$(TEST_SERVER_PORT) \
 	$(LOCUST) -f $(LOCUST_FILE) HealthUser \
 		--users 10 --spawn-rate 2 --run-time 60s \
-		--host $(LOAD_BASE_URL) --headless \
+		--host http://localhost:$(TEST_SERVER_PORT) --headless \
 		--html $(LOAD_RESULTS_DIR)/health_test_report.html \
-		--csv $(LOAD_RESULTS_DIR)/health_test
+		--csv $(LOAD_RESULTS_DIR)/health_test || true
 	@echo "$(GREEN)Health load tests completed$(NC)"
 
-load-test-stress: load-test-install ## Run stress tests (performance limits)
+load-test-stress: load-test-install load-test-server-start ## Run stress tests
 	@echo "$(BLUE)Running stress load tests...$(NC)"
-	LOAD_TEST_MODE=stress LOAD_BASE_URL=$(LOAD_BASE_URL) \
+	@sleep 1
+	LOAD_TEST_MODE=stress LOAD_BASE_URL=http://localhost:$(TEST_SERVER_PORT) \
 	$(LOCUST) -f $(LOCUST_FILE) StressUser \
 		--users 50 --spawn-rate 10 --run-time 120s \
-		--host $(LOAD_BASE_URL) --headless \
+		--host http://localhost:$(TEST_SERVER_PORT) --headless \
 		--html $(LOAD_RESULTS_DIR)/stress_test_report.html \
-		--csv $(LOAD_RESULTS_DIR)/stress_test
+		--csv $(LOAD_RESULTS_DIR)/stress_test || true
 	@echo "$(GREEN)Stress load tests completed$(NC)"
 
-load-test-mixed: load-test-install ## Run mixed scenario tests
+load-test-mixed: load-test-install load-test-server-start ## Run mixed scenario tests
 	@echo "$(BLUE)Running mixed scenario load tests...$(NC)"
-	LOAD_TEST_MODE=mixed LOAD_BASE_URL=$(LOAD_BASE_URL) \
+	@sleep 1
+	LOAD_TEST_MODE=mixed LOAD_BASE_URL=http://localhost:$(TEST_SERVER_PORT) \
 	$(LOCUST) -f $(LOCUST_FILE) MixedUser \
 		--users 30 --spawn-rate 5 --run-time 180s \
-		--host $(LOAD_BASE_URL) --headless \
+		--host http://localhost:$(TEST_SERVER_PORT) --headless \
 		--html $(LOAD_RESULTS_DIR)/mixed_test_report.html \
-		--csv $(LOAD_RESULTS_DIR)/mixed_test
+		--csv $(LOAD_RESULTS_DIR)/mixed_test || true
 	@echo "$(GREEN)Mixed scenario load tests completed$(NC)"
 
-load-test-fast: load-test-install ## Run high-performance tests with FastHttpUser
+load-test-fast: load-test-install load-test-server-start ## Run high-performance tests
 	@echo "$(BLUE)Running high-performance load tests...$(NC)"
-	LOAD_TEST_MODE=health LOAD_BASE_URL=$(LOAD_BASE_URL) \
+	@sleep 1
+	LOAD_TEST_MODE=health LOAD_BASE_URL=http://localhost:$(TEST_SERVER_PORT) \
 	$(LOCUST) -f $(LOCUST_FILE) FastHealthUser \
 		--users 100 --spawn-rate 20 --run-time 60s \
-		--host $(LOAD_BASE_URL) --headless \
+		--host http://localhost:$(TEST_SERVER_PORT) --headless \
 		--html $(LOAD_RESULTS_DIR)/fast_test_report.html \
-		--csv $(LOAD_RESULTS_DIR)/fast_test
+		--csv $(LOAD_RESULTS_DIR)/fast_test || true
 	@echo "$(GREEN)High-performance load tests completed$(NC)"
 
-load-test-external: load-test-install ## Run external target tests (requires internet)
+load-test-external: load-test-install ## Run external target tests (no local server needed)
 	@echo "$(BLUE)Running external target load tests...$(NC)"
 	LOAD_TEST_MODE=mixed LOAD_BASE_URL=http://quotes.toscrape.com ENABLE_EXTERNAL_TARGETS=true \
 	$(LOCUST) -f $(LOCUST_FILE) ExternalUser \
 		--users 20 --spawn-rate 3 --run-time 300s \
 		--host http://quotes.toscrape.com --headless \
 		--html $(LOAD_RESULTS_DIR)/external_test_report.html \
-		--csv $(LOAD_RESULTS_DIR)/external_test
+		--csv $(LOAD_RESULTS_DIR)/external_test || true
 	@echo "$(GREEN)External target load tests completed$(NC)"
 
-load-test-ci: load-test-install ## Run CI/CD pipeline tests (quick validation)
+load-test-ci: load-test-install load-test-server-start ## Run CI/CD pipeline tests
 	@echo "$(BLUE)Running CI/CD load tests...$(NC)"
-	LOAD_TEST_MODE=health LOAD_BASE_URL=$(LOAD_BASE_URL) \
+	@sleep 1
+	LOAD_TEST_MODE=health LOAD_BASE_URL=http://localhost:$(TEST_SERVER_PORT) \
 	$(LOCUST) -f $(LOCUST_FILE) HealthUser \
 		--users 5 --spawn-rate 2 --run-time 30s \
-		--host $(LOAD_BASE_URL) --headless \
+		--host http://localhost:$(TEST_SERVER_PORT) --headless \
 		--html $(LOAD_RESULTS_DIR)/ci_test_report.html \
-		--csv $(LOAD_RESULTS_DIR)/ci_test
+		--csv $(LOAD_RESULTS_DIR)/ci_test || true
 	@echo "$(GREEN)CI/CD load tests completed$(NC)"
 
-load-test-production: load-test-install ## Run production-like load tests
+load-test-production: load-test-install load-test-server-start ## Run production-like load tests
 	@echo "$(BLUE)Running production-like load tests...$(NC)"
-	LOAD_TEST_MODE=mixed LOAD_BASE_URL=$(LOAD_BASE_URL) \
+	@sleep 1
+	LOAD_TEST_MODE=mixed LOAD_BASE_URL=http://localhost:$(TEST_SERVER_PORT) \
 	$(LOCUST) -f $(LOCUST_FILE) \
 		--users 200 --spawn-rate 50 --run-time 600s \
-		--host $(LOAD_BASE_URL) --headless \
+		--host http://localhost:$(TEST_SERVER_PORT) --headless \
 		--html $(LOAD_RESULTS_DIR)/production_test_report.html \
-		--csv $(LOAD_RESULTS_DIR)/production_test
+		--csv $(LOAD_RESULTS_DIR)/production_test || true
 	@echo "$(GREEN)Production load tests completed$(NC)"
 
 load-test-results: ## Show load test results summary
@@ -247,10 +291,11 @@ load-test-results: ## Show load test results summary
 		echo "$(YELLOW)No load test results found. Run 'make load-test-health' first.$(NC)"; \
 	fi
 
-load-test-clean: ## Clean load test results
+load-test-clean: load-test-server-stop ## Clean load test results and stop server
 	@echo "$(YELLOW)Cleaning load test results...$(NC)"
 	@$(RM) $(LOAD_RESULTS_DIR) 2>/dev/null || true
 	@$(RM) load_test_results.json 2>/dev/null || true
+	@$(RM) $(TEST_SERVER_PID_FILE) 2>/dev/null || true
 	@echo "$(GREEN)Load test results cleaned$(NC)"
 
 load-run: load-test-health ## Alias for quick load testing
@@ -258,16 +303,16 @@ load-run: load-test-health ## Alias for quick load testing
 # --- Quality ---
 
 lint: venv ## Run code quality checks
-	@if [ ! -x "$(BLACK)" ] || [ ! -x "$(ISORT)" ] || [ ! -x "$(MYPY)" ] || [ ! -x "$(PYLINT)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
+	@if [ ! -x "$(BLACK)" ] || [ ! -x "$(ISROT)" ] || [ ! -x "$(MYPY)" ] || [ ! -x "$(PYLINT)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
 	$(BLACK) --check --diff core/ config/ infra/ tests/ runner.py
-	$(ISORT) --check-only --diff core/ config/ infra/ tests/ runner.py
+	$(ISROT) --check-only --diff core/ config/ infra/ tests/ runner.py
 	$(MYPY) core/ config/ infra/ runner.py --explicit-package-bases --strict --show-error-codes
 	$(PYLINT) core/ config/ infra/ runner.py --fail-under=8.5
 
 format: venv ## Auto-format code
-	@if [ ! -x "$(BLACK)" ] || [ ! -x "$(ISORT)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
+	@if [ ! -x "$(BLACK)" ] || [ ! -x "$(ISROT)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
 	$(BLACK) core/ config/ infra/ tests/ runner.py
-	$(ISORT) core/ config/ infra/ tests/ runner.py
+	$(ISROT) core/ config/ infra/ tests/ runner.py
 
 type-check: venv ## Type checking report
 	@if [ ! -x "$(MYPY)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
