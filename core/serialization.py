@@ -48,3 +48,21 @@ def loads(data: bytes | str) -> Any:
     if HAS_ORJSON and _orjson is not None:
         return _orjson.loads(data)
     return _stdlib_json.loads(data)
+
+
+# --- Backward-compatibility shims for tests ---
+
+def dumps(data: Any, *, pretty: bool = False) -> bytes:
+    """Compatibility wrapper returning bytes, matching old API.
+
+    - pretty=False: compact bytes (fast)
+    - pretty=True: pretty-printed bytes (UTF-8)
+    """
+    if pretty:
+        return pretty_dumps(data).encode("utf-8")
+    return dumps_bytes(data)
+
+
+def to_jsonable(data: Any) -> Any:
+    """Compatibility no-op: return data unchanged."""
+    return data
