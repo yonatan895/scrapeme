@@ -7,7 +7,7 @@
 A robust, production-ready web scraping and automation framework built with Selenium, featuring comprehensive observability, fault tolerance, and developer‑friendly tooling.
 
 - Docs: see docs/README.md
-- Kubernetes support removed; Docker/local execution is first‑class.
+
 
 ## Quick start
 ```bash
