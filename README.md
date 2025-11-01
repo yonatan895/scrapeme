@@ -33,7 +33,7 @@ make quickstart
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
 # Run with example configuration
-make compose up
+make compose-up
 ```
 
 ## Configuration
