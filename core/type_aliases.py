@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
-UrlStr = str  # Alias for clarity in signatures
+SiteName = str
+StepName = str
+UrlStr = str
 XPathStr = str
 CssSelector = str
