@@ -78,6 +78,7 @@ security = [
 # Load testing
 load = [
     "locust>=2.20.0,<3.0.0",
+    "brotli>=1.2.0",
 ]
 
 # Documentation
@@ -124,11 +125,11 @@ dev = [
 [tool.black]
 line-length = 100
 target-version = ["py311"]
-include = '\.pyi?$'
+include = '\\.pyi?$'
 extend-exclude = '''
 /(
-  \.git
-  | \.venv
+  \\.git
+  | \\.venv
   | build
   | dist
 )/
