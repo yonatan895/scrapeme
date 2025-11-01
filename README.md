@@ -13,53 +13,71 @@ A robust, production-ready web scraping and automation framework built with Sele
 - Structured logging, Prometheus metrics, health checks, and build info
 - Docker/Kubernetes deploys, Selenium Grid integration, and comprehensive Makefile workflows
 
-## 🚀 Quick Start
+## 🚀 Quick Start (now accurate)
 
 ```bash
-# Recommended (UV)
-curl -LsSf https://astral.sh/uv/install.sh | sh   # Windows: powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+# 1) Install UV (recommended)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Windows: powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 
+# 2) Clone
 git clone https://github.com/yonatan895/scrapeme.git
 cd scrapeme
 
-make quickstart        # venv + all deps + basic verification
-source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
+# 3) One-shot setup
+make quickstart          # creates venv, installs all extras, verifies imports
 
-# Run example
+# 4) Activate venv
+source .venv/bin/activate    # Windows: .venv\\Scripts\\activate
+
+# 5) Run example
 python runner.py --config config/sites.yaml --headless --out results.json
 ```
 
 ## 📋 Configuration
 
-Use config/sites.yaml for site definitions (example included). Environment variables for credentials follow the pattern {SITE_NAME_UPPER}_USERNAME/PASSWORD.
+- Use config/sites.yaml for site definitions (example committed).
+- Credentials via env: {SITE_NAME_UPPER}_USERNAME / {SITE_NAME_UPPER}_PASSWORD.
 
-## 🧰 Makefile commands (updated)
-
-These are the most common commands after recent changes. Run `make help` for the full list.
+## 🧰 Makefile commands (synced)
 
 - Environment & deps
-  - make quickstart: Create venv, install all extras, verify install
-  - make venv | make install-all | make verify-install
+  - make venv               # create virtual environment (UV)
+  - make install-all        # install all extras (dev, lint, security, load, docs)
+  - make verify-install     # import smoke (selenium, tenacity, yaml)
+  - make compile-requirements  # regenerate requirements*.txt from pyproject
 
-- Code quality & tests
-  - make check: Format, lint, and quick tests
-  - make format | make lint | make type-check | make security-check | make test
+- Development workflow
+  - make format             # Black + isort
+  - make lint               # Black check, isort check, mypy, pylint
+  - make type-check         # mypy strict report
+  - make check              # format + lint + unit tests (pre-commit style)
 
-- Load testing (new)
-  - make load-run: Run Locust headless using tests/load/locustfile.py
-    - Overrides: USERS=30 SPAWN=3 DURATION=1m LOAD_BASE_URL=http://quotes.toscrape.com
-    - Auto-installs the "load" extra via UV if Locust is missing
+- Tests
+  - make test               # all tests with coverage
+  - make test-unit          # unit tests only
+  - make test-integration   # integration tests
+  - make test-e2e           # end-to-end tests
+  - make test-property      # property-based tests
+  - make test-load          # load marker (pytest)
+  - make test-chaos         # chaos marker (pytest)
 
-- Docker
-  - make docker-build | make docker-build-dev | make docker-test | make docker-run
-  - make docker-prepare: Creates results, artifacts, config folders; notes to use committed config/sites.yaml
+- Load testing (real Locust)
+  - make load-run           # headless Locust
+    - Variables: USERS=30 SPAWN=3 DURATION=1m LOAD_BASE_URL=http://quotes.toscrape.com
+    - Auto-installs "[load]" extras via UV if missing
 
-- Docker Compose (filename fixed to .yaml)
-  - make compose-up: Start full stack (Selenium Hub + monitoring)
-  - make compose-logs: Tail logs (uses docker-compose.production.yaml)
-  - make compose-ps: Show processes
-  - make compose-down: Stop stack (uses .yaml)
-  - make compose-clean: Stop and remove volumes (uses .yaml)
+- Docker & Compose
+  - make docker-prepare     # create results/artifacts/config (uses committed config/sites.yaml)
+  - make docker-build       # production image
+  - make docker-build-dev   # development image
+  - make docker-test        # run tests in container
+  - make docker-run         # run app container
+  - make compose-up         # start stack (docker-compose.production.yaml)
+  - make compose-logs       # tail logs
+  - make compose-ps         # list services
+  - make compose-down       # stop stack
+  - make compose-clean      # stop and remove volumes
 
 - Kubernetes
   - make k8s-deploy | k8s-status | k8s-logs | k8s-port-forward | k8s-delete
@@ -69,41 +87,37 @@ These are the most common commands after recent changes. Run `make help` for the
 
 ## 🧪 Tests
 
-- Unit tests live under tests/unit and include config models, rate limiter, URL utils, and a schema sanity test that loads all YAML under config/ with the project loader.
-- Property, chaos, benchmarks folders exist; extend as needed.
-- Load testing uses Locust at tests/load/locustfile.py (new real scenario).
+- Unit tests at tests/unit; includes config models, rate limiter, URL utils, and a schema sanity test loading all YAML via the project loader.
+- Load tests use Locust at tests/load/locustfile.py (actual HTTP traffic).
 
-Run examples:
+Examples:
 
 ```bash
-make test             # coverage and reports
-make load-run         # headless Locust (override USERS/SPAWN/DURATION)
+make test
+make load-run USERS=50 SPAWN=5 DURATION=2m
 ```
 
 ## 📊 Monitoring
 
-Expose Prometheus on port 9090 from the app, Prometheus server on 9091 via docker-compose.production.yaml, Grafana on 3000, Alertmanager on 9093.
+- App exports Prometheus on 9090; docker-compose.production.yaml exposes Prometheus server on 9091, Grafana on 3000, Alertmanager on 9093.
 
 ## 🔒 Security
 
-- The load extra pins brotli>=1.2.0 to ensure patched versions during load testing installation.
+- The "load" extra pins brotli>=1.2.0 to ensure patched versions during load testing installs.
 
 ## 🐳 Docker & ☸️ Kubernetes
 
-See docker-compose.production.yaml for services; use compose-* targets listed above. Kubernetes manifests are under k8s/ and controlled via k8s-* targets.
+Use the compose-* and k8s-* Make targets shown above. See docker-compose.production.yaml and k8s/ manifests.
 
 ## 📚 API Reference (selected)
 
-- core.scraper.SiteScraper: orchestrates steps and extraction
-- core.browser.BrowserManager: manages WebDriver lifecycle and pooling
-- core.auth.AuthFlow: performs login flows using configured selectors
+- core.scraper.SiteScraper – orchestrates steps and extraction
+- core.browser.BrowserManager – WebDriver lifecycle and pooling
+- core.auth.AuthFlow – login flows using configured selectors
 
 ## 🔍 Troubleshooting
 
-- Permissions for results/artifacts in Docker: chown to your UID/GID
+- If Locust is missing: make load-run installs [load] extras automatically
+- If results/artifacts perms fail in Docker: chown to your UID/GID
 - Increase wait/page timeouts in sites.yaml for slow endpoints
-- Use --remote-url with Selenium Grid
-
----
-
-Run `make help` at any time to see all available targets with descriptions.
+- Use --remote-url to target Selenium Grid
