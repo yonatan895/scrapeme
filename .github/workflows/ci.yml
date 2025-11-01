@@ -66,19 +66,53 @@ jobs:
           if-no-files-found: ignore
 
   # -------------------------------------
+  # Detect changed paths for conditional jobs
+  # -------------------------------------
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      touched_core: ${{ steps.setout.outputs.any_changed_core }}
+      touched_infra: ${{ steps.setout.outputs.any_changed_infra }}
+      touched_config: ${{ steps.setout.outputs.any_changed_config }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: changed
+        uses: tj-actions/changed-files@v45
+        with:
+          files_yaml: |
+            core:
+              - 'core/**'
+            infra:
+              - 'infra/**'
+            config:
+              - 'config/**'
+
+      - name: Set outputs
+        id: setout
+        run: |
+          echo "any_changed_core=${{ steps.changed.outputs.core_any_changed }}" >> $GITHUB_OUTPUT
+          echo "any_changed_infra=${{ steps.changed.outputs.infra_any_changed }}" >> $GITHUB_OUTPUT
+          echo "any_changed_config=${{ steps.changed.outputs.config_any_changed }}" >> $GITHUB_OUTPUT
+
+  # -------------------------------------
   # Conditional integration (compose)
   # -------------------------------------
   integration:
     name: Integration (conditional)
-    needs: lint_types_unit
+    needs: [lint_types_unit, changes]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: ${{ github.event_name != 'pull_request' || contains( join(fromJson(steps.changed.outputs.files)), 'core/' ) || contains( join(fromJson(steps.changed.outputs.files)), 'infra/' ) || contains( join(fromJson(steps.changed.outputs.files)), 'config/' ) }}
+    if: |
+      github.event_name != 'pull_request' ||
+      needs.changes.outputs.touched_core == 'true' ||
+      needs.changes.outputs.touched_infra == 'true' ||
+      needs.changes.outputs.touched_config == 'true'
     steps:
       - uses: actions/checkout@v4
-
-      - id: changed
-        uses: tj-actions/changed-files@v45
 
       - uses: actions/setup-python@v5
         with:
