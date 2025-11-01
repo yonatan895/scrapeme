@@ -1,0 +1,62 @@
+# Persistent storage for ScrapeMe artifacts
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: scrapeme-artifacts-pvc
+  labels:
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  # storageClassName: nfs-client  # Uncomment and adjust for your cluster
+
+---
+# Persistent storage for ScrapeMe results
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: scrapeme-results-pvc
+  labels:
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  # storageClassName: nfs-client
+
+---
+# Persistent storage for Prometheus data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data-pvc
+  labels:
+    app.kubernetes.io/component: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  # storageClassName: gp2
+
+---
+# Persistent storage for Grafana data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data-pvc
+  labels:
+    app.kubernetes.io/component: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  # storageClassName: gp2

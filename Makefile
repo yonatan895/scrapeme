@@ -4,6 +4,7 @@
         docker-build docker-build-dev docker-test docker-push docker-run docker-scan docker-prepare docker-shell docker-clean \
         docs serve-docs docs-clean compose-up compose-down compose-logs compose-ps compose-restart compose-clean \
         k8s-deploy k8s-delete k8s-logs k8s-status k8s-describe k8s-shell k8s-port-forward k8s-restart \
+        k8s-help k8s-validate k8s-debug k8s-rollback k8s-scale k8s-dev k8s-staging k8s-prod k8s-secrets k8s-monitoring k8s-backup \
         ci-local pre-commit-install pre-commit-run pre-commit-update quickstart dev check fix watch version version-bump git-tag \
         info deps-tree deps-outdated health-check diagnose load-run verify-python \
         load-test-health load-test-stress load-test-mixed load-test-fast load-test-external load-test-ci load-test-production \
@@ -82,8 +83,19 @@ endif
 SHELL := /bin/bash
 .SHELLFLAGS := -e -o pipefail -c
 
+# Include Kubernetes-specific targets
+-include Makefile.k8s
+
 help: ## Show help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-24s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@echo ""
+	@echo "$(BLUE)=== Kubernetes Commands ===$(NC)"
+	@echo "  k8s-help                 Show Kubernetes-specific help"
+	@echo "  k8s-dev                  Deploy to development environment"
+	@echo "  k8s-staging              Deploy to staging environment"
+	@echo "  k8s-prod                 Deploy to production environment"
+	@echo "  k8s-status               Show deployment status"
+	@echo "  k8s-logs                 Show application logs"
 
 # --- Environment & Dependencies ---
 
