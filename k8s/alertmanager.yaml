@@ -1,0 +1,157 @@
+# AlertManager deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: scrapeme
+  labels:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: scrapeme
+spec:
+  replicas: 1  # Single instance for simplicity
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+        app.kubernetes.io/name: alertmanager
+        app.kubernetes.io/component: monitoring
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9093"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: alertmanager
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534  # nobody user
+        runAsGroup: 65534
+        fsGroup: 65534
+      containers:
+      - name: alertmanager
+        image: prom/alertmanager:latest
+        args:
+        - '--config.file=/etc/alertmanager/alertmanager.yml'
+        - '--storage.path=/alertmanager'
+        - '--web.external-url=http://localhost:9093'
+        - '--web.listen-address=0.0.0.0:9093'
+        - '--log.level=info'
+        ports:
+        - name: alertmanager
+          containerPort: 9093
+          protocol: TCP
+        volumeMounts:
+        - name: config
+          mountPath: /etc/alertmanager
+          readOnly: true
+        - name: storage
+          mountPath: /alertmanager
+        - name: tmp
+          mountPath: /tmp
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9093
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9093
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: config
+        configMap:
+          name: alertmanager-config
+          items:
+          - key: alertmanager.yml
+            path: alertmanager.yml
+      - name: storage
+        emptyDir:
+          sizeLimit: 1Gi
+      - name: tmp
+        emptyDir:
+          sizeLimit: 100Mi
+
+---
+# Service Account for AlertManager
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alertmanager
+  namespace: scrapeme
+  labels:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/component: monitoring
+automountServiceAccountToken: false
+
+---
+# Service for AlertManager
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: scrapeme
+  labels:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/component: monitoring
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9093"
+spec:
+  selector:
+    app: alertmanager
+  ports:
+  - name: alertmanager
+    port: 9093
+    targetPort: 9093
+    protocol: TCP
+  type: ClusterIP
+
+---
+# LoadBalancer service for external AlertManager access (optional)
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: alertmanager-external
+#   namespace: scrapeme
+#   labels:
+#     app.kubernetes.io/name: alertmanager
+#     app.kubernetes.io/component: monitoring
+# spec:
+#   selector:
+#     app: alertmanager
+#   ports:
+#   - name: alertmanager
+#     port: 9093
+#     targetPort: 9093
+#     protocol: TCP
+#   type: LoadBalancer
+#   loadBalancerSourceRanges:
+#   - "10.0.0.0/8"
+#   - "172.16.0.0/12"
+#   - "192.168.0.0/16"
