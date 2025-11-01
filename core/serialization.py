@@ -1,120 +1,42 @@
+"""Serialization helpers for stable JSON encoding/decoding."""
+
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from datetime import datetime
-from enum import Enum
-from pathlib import Path
 from typing import Any
 
 try:
-    import orjson as _orjson
-
-    def _dumps_bytes(obj: Any, *, pretty: bool = False) -> bytes:
-        opt = 0
-        if pretty:
-            opt |= _orjson.OPT_INDENT_2
-        return _orjson.dumps(obj, option=opt)
-
-except Exception:  # pragma: no cover - exercised in fallback test
-    import json as _json
-
-    def _dumps_bytes(obj: Any, *, pretty: bool = False) -> bytes:
-        return _json.dumps(obj, indent=2 if pretty else None, ensure_ascii=False).encode("utf-8")
+    import orjson as _json
+    _HAS_ORJSON = True
+except Exception:  # pragma: no cover - fallback path
+    import json as _json  # type: ignore[no-redef]
+    _HAS_ORJSON = False
 
 
-_JSON_PRIMITIVES = (str, int, float, bool, type(None))
+def dumps(data: Any) -> bytes | str:
+    """Serialize data to JSON.
 
-
-def to_jsonable(obj: Any) -> Any:
-    """Convert objects to JSON-safe structures with minimal work.
-
-    - Leaves JSON primitives as-is.
-    - Converts dict/sequence containers iteratively to avoid recursion overhead.
-    - Adapts only non-JSON types (Path → str, datetime → ISO 8601, Enum → value).
-    - Memoizes by id() to avoid revisiting shared nodes.
+    Returns bytes when using orjson, str when falling back to stdlib json.
     """
-    seen: set[int] = set()
-
-    def _adapt_scalar(x: Any) -> Any:
-        if isinstance(x, _JSON_PRIMITIVES):
-            return x
-        if isinstance(x, Path):
-            return str(x)
-        if isinstance(x, datetime):
-            return x.isoformat()
-        if isinstance(x, Enum):
-            return x.value
-        return str(x)
-
-    if isinstance(obj, _JSON_PRIMITIVES):
-        return obj
-
-    if isinstance(obj, Mapping):
-        root: Any = {}
-    elif isinstance(obj, (list, tuple)):
-        root = []
-    else:
-        return _adapt_scalar(obj)
-
-    work: list[tuple[Any, Any]] = [(obj, root)]
-    seen.add(id(obj))
-
-    while work:
-        src, tgt = work.pop()
-        if isinstance(src, Mapping):
-            for k, v in src.items():
-                key = k if isinstance(k, str) else str(k)
-                if isinstance(v, _JSON_PRIMITIVES):
-                    tgt[key] = v
-                    continue
-                if isinstance(v, Mapping):
-                    if id(v) in seen:
-                        tgt[key] = None
-                        continue
-                    seen.add(id(v))
-                    new_dict: dict[str, Any] = {}
-                    tgt[key] = new_dict
-                    work.append((v, new_dict))
-                elif isinstance(v, (list, tuple)):
-                    if id(v) in seen:
-                        tgt[key] = None
-                        continue
-                    seen.add(id(v))
-                    new_list: list[Any] = []
-                    tgt[key] = new_list
-                    work.append((v, new_list))
-                else:
-                    tgt[key] = _adapt_scalar(v)
-        else:  # list/tuple
-            for v in src:
-                if isinstance(v, _JSON_PRIMITIVES):
-                    tgt.append(v)
-                    continue
-                if isinstance(v, Mapping):
-                    if id(v) in seen:
-                        tgt.append(None)
-                        continue
-                    seen.add(id(v))
-                    new_dict = {}
-                    tgt.append(new_dict)
-                    work.append((v, new_dict))
-                elif isinstance(v, (list, tuple)):
-                    if id(v) in seen:
-                        tgt.append(None)
-                        continue
-                    seen.add(id(v))
-                    child_list: list[Any] = []
-                    tgt.append(child_list)
-                    work.append((v, child_list))
-                else:
-                    tgt.append(_adapt_scalar(v))
-
-    return root
+    if _HAS_ORJSON and hasattr(_json, "dumps"):
+        # Use default options if OPT_INDENT_2 not present in orjson build
+        opts = getattr(_json, "OPT_INDENT_2", 0)
+        return _json.dumps(data, option=opts)  # type: ignore[call-arg]
+    # Stdlib json fallback
+    return _json.dumps(data).encode("utf-8")
 
 
-def dumps(obj: Any, *, pretty: bool = False) -> bytes:
-    """Serialize to bytes using orjson if available, else stdlib json.
+def pretty_dumps(data: Any) -> str:
+    """Pretty-print JSON for logs and artifacts."""
+    if _HAS_ORJSON:
+        return _json.dumps(data, option=getattr(_json, "OPT_INDENT_2", 0)).decode("utf-8")  # type: ignore[call-arg]
+    return _json.dumps(data, indent=2)
 
-    The input should already be JSON-safe (use to_jsonable first for non-JSON types).
-    """
-    return _dumps_bytes(obj, pretty=pretty)
+
+def loads(data: bytes | str) -> Any:
+    """Deserialize data from JSON."""
+    if isinstance(data, (bytes, bytearray)):
+        try:
+            return _json.loads(data)
+        except Exception:  # pragma: no cover
+            return _json.loads(data.decode("utf-8"))
+    return _json.loads(data)
