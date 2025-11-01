@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-Production-ready web scraping and automation framework built with Selenium, featuring comprehensive observability, fault tolerance, and cloud-native deployment capabilities.
+A (hopefully) production-ready web scraping and automation framework built with [Selenium](https://www.selenium.dev/)
 
 ## Features
 
