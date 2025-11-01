@@ -15,7 +15,7 @@ from config.models import SiteConfig
 from core.auth import AuthFlow
 from core.browser import BrowserManager
 from core.circuit_breaker import CircuitBreakerRegistry, CircuitState
-from core.exceptions import AutomationError
+from core.exceptions import AutomationError, ErrorContext
 from core.metrics import Metrics
 from core.scraper import SiteScraper
 from core.secrets import EnvSecrets
@@ -39,8 +39,8 @@ def format_error_result(site_name: str, error: Exception) -> dict[str, Any]:
         },
     }
 
-    if isinstance(error, AutomationError) and getattr(error, "context", None):
-        ctx = error.context  # type: ignore[assignment]
+    ctx: ErrorContext | None = getattr(error, "context", None) if isinstance(error, AutomationError) else None
+    if ctx is not None:
         context_data: dict[str, Any] = {
             k: v
             for k, v in {
