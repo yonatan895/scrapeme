@@ -1,0 +1,107 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.cover
+.hypothesis/
+.tox/
+test-results/
+coverage.xml
+*.log
+
+# Linting & Type Checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pylint.d/
+pylint-report.txt
+bandit-report.json
+safety-report.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Artifacts
+artifacts/
+results/
+results.json
+*.png
+*.html
+!tests/fixtures/**/*.html
+
+# Secrets & Credentials
+.env
+.env.local
+secrets/
+*.pem
+*.key
+
+# Docker
+.dockerignore
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# Documentation
+docs/_build/
+docs/.doctrees/
+site/
+
+# Benchmarks
+benchmark.json
+.benchmarks/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Monitoring
+prometheus-data/
+grafana-data/
+alertmanager-data/

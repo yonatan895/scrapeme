@@ -1,0 +1,225 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "scrapeme"
+version = "2.0.0"
+description = "Selenium automation with observability"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Yonatan Cohen", email = "yonatan.leshco@gmail.com"}
+]
+keywords = ["selenium", "automation", "scraping", "testing"]
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+# Core dependencies (runtime)
+dependencies = [
+    "selenium>=4.15.0,<5.0.0",
+    "tenacity>=9.1.2",
+    "PyYAML>=6.0",
+    "prometheus-client>=0.19.0",
+    "structlog>=25.4.0",
+    "cachetools>=6.2.1",
+    "psutil>=7.1.1,<8.0",
+    "lxml>=6.0.2",
+    "orjson>=3.9.0",  # High-performance JSON encoder/decoder for all clients
+]
+
+# Optional dependency groups
+[project.optional-dependencies]
+# Development dependencies
+dev = [
+    "pytest>=8.4.2",
+    "pytest-cov>=7.0.0",
+    "pytest-asyncio>=1.2.0",
+    "pytest-benchmark>=5.1.0",
+    "pytest-timeout>=2.2.0,<3.0.0",
+    "pytest-mock>=3.12.0,<4.0.0",
+    "pytest-watch>=4.2.0,<5.0.0",
+    "hypothesis>=6.92.0,<7.0.0",
+    "faker>=37.11.0",
+    "Flask>=3.0.0,<4.0.0",
+    "responses>=0.23.0,<1.0.0",
+    "types-PyYAML>=6.0.12",
+    "lxml-stubs>=0.5.1",
+]
+
+bench = [
+    "pytest>=8.4.2",
+    "pytest-benchmark>=5.1.0",
+]
+
+parallel = [
+    "pytest-xdist>=3.3.0,<4.0.0",
+]
+
+# Code quality
+lint = [
+    "black>=25.9.0",
+    "isort>=7.0.0",
+    "mypy>=1.18.2",
+    "pylint>=4.0.2",
+    "types-PyYAML>=6.0.0",
+]
+
+# Security scanning
+security = [
+    "bandit[toml]>=1.8.6",
+    "safety>=3.6.2",
+]
+
+# Load testing (lock brotli across project via load extras)
+load = [
+    "locust>=2.20.0,<3.0.0",
+    "brotli==1.1.0",
+]
+
+# Documentation
+docs = [
+    "sphinx>=8.2.3",
+    "sphinx-rtd-theme>=3.0.2",
+    "sphinx-autodoc-typehints>=3.5.2",
+]
+
+# All development dependencies
+all = [
+    "selenium-automation[dev,lint,security,load,docs]",
+]
+
+[project.scripts]
+selenium-automation = "runner:main"
+
+[project.urls]
+Homepage = "https://github.com/yonatan895"
+
+# Hatchling build configuration
+[tool.hatch.build.targets.wheel]
+packages = ["core", "config", "infra"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/core",
+    "/config",
+    "/infra",
+    "/runner.py",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+]
+
+# UV-specific configuration
+[dependency-groups]
+dev = [
+    "selenium-automation[all]",
+]
+
+# Black configuration
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+include = '\\.pyi?$'
+extend-exclude = '''
+/(
+  \\.git
+  | \\.venv
+  | build
+  | dist
+)/
+'''
+
+# isort configuration
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_gitignore = true
+
+# mypy configuration
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = false
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+# pylint configuration
+[tool.pylint.main]
+fail-under = 8.5
+max-line-length = 100
+disable = [
+    "too-few-public-methods",
+    "too-many-arguments",
+    "too-many-instance-attributes",
+]
+
+[tool.pylint.design]
+max-args = 10
+max-attributes = 15
+
+# pytest configuration
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "-q",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=core",
+    "--cov=config",
+    "--cov=infra",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "e2e: End-to-end tests",
+    "property: Property-based tests",
+    "load: Load tests",
+    "chaos: Chaos engineering tests",
+    "slow: Slow tests",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+branch = true
+source = ["core", "config", "infra"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "@abstractmethod",
+]
+precision = 2
+show_missing = true
+skip_covered = false
+
+# Bandit security configuration
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "venv"]
+tests = ["B201", "B301"]
+skips = ["B101", "B601"]

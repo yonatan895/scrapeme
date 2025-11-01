@@ -1,0 +1,261 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, dev]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: '3.12'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ------------------------------
+  # Fast code checks (no Docker)
+  # ------------------------------
+  lint_types_unit:
+    name: Lint, Types, Unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('pyproject.toml','requirements.txt','requirements-dev.txt','requirements-all.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dev+lint deps (system)
+        run: uv pip install --system -e ".[dev,lint]"
+
+      - name: Black (check)
+        run: black --check --diff core/ config/ infra/ tests/ runner.py
+
+      - name: isort (check)
+        run: isort --check-only --diff core/ config/ infra/ tests/ runner.py
+
+      - name: mypy (strict)
+        run: mypy core/ config/ infra/ runner.py --explicit-package-bases --strict --show-error-codes
+
+      - name: Unit tests only (fast)
+        run: pytest -q -m "unit or not integration and not e2e" --cov=core --cov=config --cov=infra --cov-report=xml --cov-fail-under=0
+
+      - name: Upload coverage (XML)
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore
+
+  # -------------------------------------
+  # Detect changed paths for conditional jobs
+  # -------------------------------------
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      touched_core: ${{ steps.setout.outputs.any_changed_core }}
+      touched_infra: ${{ steps.setout.outputs.any_changed_infra }}
+      touched_config: ${{ steps.setout.outputs.any_changed_config }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: changed
+        uses: tj-actions/changed-files@v45
+        with:
+          files_yaml: |
+            core:
+              - 'core/**'
+            infra:
+              - 'infra/**'
+            config:
+              - 'config/**'
+
+      - name: Set outputs
+        id: setout
+        run: |
+          echo "any_changed_core=${{ steps.changed.outputs.core_any_changed }}" >> $GITHUB_OUTPUT
+          echo "any_changed_infra=${{ steps.changed.outputs.infra_any_changed }}" >> $GITHUB_OUTPUT
+          echo "any_changed_config=${{ steps.changed.outputs.config_any_changed }}" >> $GITHUB_OUTPUT
+
+  # -------------------------------------
+  # Conditional integration (compose)
+  # -------------------------------------
+  integration:
+    name: Integration
+    needs: [lint_types_unit, changes]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: |
+      github.event_name != 'pull_request' ||
+      needs.changes.outputs.touched_core == 'true' ||
+      needs.changes.outputs.touched_infra == 'true' ||
+      needs.changes.outputs.touched_config == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('pyproject.toml','requirements.txt','requirements-dev.txt','requirements-all.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dev deps
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Check for integration tests
+        id: has_integration
+        run: |
+          if find tests/integration -name "test_*.py" -type f 2>/dev/null | grep -q .; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "✅ Integration tests found"
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No integration tests found"
+          fi
+
+      - name: Selenium Grid up
+        if: steps.has_integration.outputs.found == 'true'
+        run: docker compose -f docker-compose.production.yaml up -d
+
+      - name: Wait for Selenium Grid
+        if: steps.has_integration.outputs.found == 'true'
+        run: |
+          timeout 60 bash -c 'until curl -sf http://localhost:4444/status; do sleep 2; done' || {
+            echo "Selenium Grid failed to start, running without grid"
+          }
+
+      - name: Integration tests
+        if: steps.has_integration.outputs.found == 'true'
+        env:
+          SELENIUM_REMOTE_URL: http://localhost:4444/wd/hub
+        run: pytest -q -m integration --timeout=300 --cov-fail-under=0 -v
+
+      - name: No integration tests to run
+        if: steps.has_integration.outputs.found != 'true'
+        run: echo "No integration tests found; skipping Selenium Grid setup."
+
+      - name: Teardown
+        if: always() && steps.has_integration.outputs.found == 'true'
+        run: docker compose -f docker-compose.production.yaml down -v
+
+  # -------------------------------------
+  # Build image with GHCR cache
+  # -------------------------------------
+  docker_build:
+    name: Build image
+    needs: lint_types_unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: production
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          provenance: false
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache
+          cache-to: type=registry,mode=max,ref=ghcr.io/${{ github.repository }}:buildcache
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # -------------------------------------
+  # Publish (only on main or tags)
+  # -------------------------------------
+  publish:
+    name: Publish image
+    needs: [docker_build, integration]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build & push (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: production
+          push: true
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:buildcache
+          cache-to: type=registry,mode=max,ref=ghcr.io/${{ github.repository }}:buildcache
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

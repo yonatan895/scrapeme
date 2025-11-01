@@ -1,0 +1,10 @@
+{
+  "timestamp": 1762029733.0779343,
+  "test_mode": "health",
+  "target_base": "http://localhost:9090",
+  "total_requests": 114,
+  "total_failures": 114,
+  "avg_response_time": 1.3009828948142648,
+  "max_response_time": 13.023013998463284,
+  "requests_per_second": 8.2
+}
