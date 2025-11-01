@@ -23,11 +23,9 @@ FROM runtime-base AS deps-builder
 COPY requirements.txt requirements.txt
 COPY requirements-all.txt requirements-all.txt
 COPY pyproject.toml pyproject.toml
-# Install uv once (fast resolver/installer)
-RUN pip install --upgrade pip && pip install uv
-# Build wheels with cache mount to persist between builds
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip wheel -r requirements.txt -w /wheels
+# Prebuild wheels using pip (uv has no 'wheel' subcommand)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip wheel --no-cache-dir -r requirements.txt -w /wheels
 
 ############################
 # Production image (slim)
@@ -54,8 +52,9 @@ ENTRYPOINT ["python", "runner.py"]
 FROM deps-builder AS dev
 WORKDIR /app
 COPY . .
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install -e ".[dev,lint,security,load,docs]"
+# Optional: use uv for faster editable installs (no wheel usage)
+RUN pip install uv && \
+    UV_LINK_MODE=copy uv pip install -e ".[dev,lint,security,load,docs]"
 
 ############################
 # Test image
