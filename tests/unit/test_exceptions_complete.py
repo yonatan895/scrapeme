@@ -3,11 +3,11 @@
 import pytest
 
 from core.exceptions import (
-    ElementNotFoundError,
-    TimeoutError,
-    ScrapingError,
-    ConfigurationError,
     AuthenticationError,
+    ConfigurationError,
+    ElementNotFoundError,
+    ScrapingError,
+    TimeoutError,
 )
 
 
@@ -18,11 +18,11 @@ class TestExceptions:
         # Basic message
         err1 = ElementNotFoundError("Element not found")
         assert str(err1) == "Element not found"
-        
+
         # With locator info
         err2 = ElementNotFoundError("Element not found: //div[@id='test']")
         assert "//div[@id='test']" in str(err2)
-        
+
         # With chained exception
         cause = Exception("Original cause")
         err3 = ElementNotFoundError("Element not found") from cause
@@ -33,11 +33,11 @@ class TestExceptions:
         # With timeout seconds
         err1 = TimeoutError("Operation timed out", timeout_sec=30)
         assert "Operation timed out" in str(err1)
-        
+
         # Without timeout seconds
         err2 = TimeoutError("Operation timed out")
         assert "Operation timed out" in str(err2)
-        
+
         # With chained exception
         cause = Exception("Selenium timeout")
         err3 = TimeoutError("Wait failed", timeout_sec=10) from cause
@@ -47,7 +47,7 @@ class TestExceptions:
         """Test ScrapingError construction."""
         err1 = ScrapingError("Failed to scrape data")
         assert str(err1) == "Failed to scrape data"
-        
+
         # With site context
         err2 = ScrapingError("Failed to scrape from example.com")
         assert "example.com" in str(err2)
@@ -56,7 +56,7 @@ class TestExceptions:
         """Test ConfigurationError construction."""
         err1 = ConfigurationError("Invalid config")
         assert str(err1) == "Invalid config"
-        
+
         # With field context
         err2 = ConfigurationError("Missing required field: base_url")
         assert "base_url" in str(err2)
@@ -65,7 +65,7 @@ class TestExceptions:
         """Test AuthenticationError construction."""
         err1 = AuthenticationError("Login failed")
         assert str(err1) == "Login failed"
-        
+
         # With credential context
         err2 = AuthenticationError("Invalid credentials for user: testuser")
         assert "testuser" in str(err2)
