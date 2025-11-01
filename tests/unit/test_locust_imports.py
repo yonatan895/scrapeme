@@ -3,6 +3,10 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip(
+    "locust", reason="locust not installed; install extras [load] to enable this test"
+)
+
 
 @pytest.mark.unit
 def test_locust_files_importable():
