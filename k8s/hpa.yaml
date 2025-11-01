@@ -1,13 +1,13 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: selenium-automation
-  namespace: selenium-automation
+  name: scrapeme-automation
+  namespace: scrapeme
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: selenium-automation
+    name: scrapeme-automation
   minReplicas: 2
   maxReplicas: 10
   metrics:
@@ -23,13 +23,6 @@ spec:
       target:
         type: Utilization
         averageUtilization: 80
-  - type: Pods
-    pods:
-      metric:
-        name: selenium_active_sessions
-      target:
-        type: AverageValue
-        averageValue: "5"
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300
