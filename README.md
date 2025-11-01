@@ -76,39 +76,6 @@ python runner.py --config config/sites.yaml --jsonl --out results.jsonl
 python runner.py --config config/sites.yaml --daemon --metrics-port 9090
 ```
 
-## Docker
-
-Build and run using the default registry-qualified tag (as defined in the Makefile):
-
-```bash
-make docker-build
-# Image tag: ghcr.io/yonatan895/scrapeme:latest
-
-docker run --rm -it \
-  -v "$(pwd)/config:/app/config:ro" \
-  -v "$(pwd)/artifacts:/app/artifacts" \
-  ghcr.io/yonatan895/scrapeme:latest \
-  --config /app/config/sites.yaml --headless --daemon
-```
-
-Local-only alternative (no registry prefix):
-
-```bash
-make docker-build REGISTRY=local
-
-docker run --rm -it \
-  -v "$(pwd)/config:/app/config:ro" \
-  -v "$(pwd)/artifacts:/app/artifacts" \
-  local/scrapeme:latest \
-  --config /app/config/sites.yaml --headless --daemon
-```
-
-Shortcut via Makefile:
-
-```bash
-make docker-run ARGS="--config /app/config/sites.yaml --headless --daemon"
-```
-
 ## Development
 
 ```bash
