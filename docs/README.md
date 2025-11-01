@@ -1,7 +1,5 @@
 # ScrapeMe Documentation
 
-This docs/ folder provides practical, concise guides for day‑to‑day use. Keep PRs small and focused; link to deeper code references when needed.
-
 - Getting started: docs/getting-started.md
 - Configuration: docs/configuration.md
 - Running & CLI: docs/running.md
