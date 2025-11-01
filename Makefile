@@ -39,19 +39,27 @@ IMAGE_NAME := scrapeme
 IMAGE_TAG := latest
 REGISTRY := ghcr.io/yonatan895
 
-# Colors (no-op on Windows)
+# Colors (portable via tput; disabled when not a TTY)
 ifneq ($(OS),Windows_NT)
-    GREEN := \033[0;32m
-    YELLOW := \033[0;33m
-    RED := \033[0;31m
-    BLUE := \033[0;34m
-    NC := \033[0m
-else
+  ifeq (,$(shell test -t 1 || echo notty))
+    GREEN := $(shell tput setaf 2 2>/dev/null)
+    YELLOW := $(shell tput setaf 3 2>/dev/null)
+    RED := $(shell tput setaf 1 2>/dev/null)
+    BLUE := $(shell tput setaf 4 2>/dev/null)
+    NC := $(shell tput sgr0 2>/dev/null)
+  else
     GREEN :=
     YELLOW :=
     RED :=
     BLUE :=
     NC :=
+  endif
+else
+  GREEN :=
+  YELLOW :=
+  RED :=
+  BLUE :=
+  NC :=
 endif
 
 SHELL := /bin/bash
@@ -151,10 +159,10 @@ security-check: venv ## Security scans (bandit + safety)
 
 compose-up: ## Start full stack (Selenium Grid + Monitoring)
 	$(DOCKER_COMPOSE) -f docker-compose.production.yaml up -d
-	@printf '  Selenium Hub:  $(BLUE)http://localhost:4444$(NC)\n'
-	@printf '  Prometheus:    $(BLUE)http://localhost:9091$(NC)\n'
-	@printf '  Grafana:       $(BLUE)http://localhost:3000$(NC) (admin/admin)\n'
-	@printf '  Alertmanager:  $(BLUE)http://localhost:9093$(NC)\n'
+	@printf '  %shttp://localhost:4444%s\n' "$(BLUE)Selenium Hub:  " "$(NC)"
+	@printf '  %shttp://localhost:9091%s\n' "$(BLUE)Prometheus:    " "$(NC)"
+	@printf '  %shttp://localhost:3000%s (admin/admin)\n' "$(BLUE)Grafana:       " "$(NC)"
+	@printf '  %shttp://localhost:9093%s\n' "$(BLUE)Alertmanager:  " "$(NC)"
 
 compose-down: ## Stop Docker Compose stack
 	$(DOCKER_COMPOSE) -f docker-compose.production.yaml down
@@ -172,8 +180,9 @@ compose-clean: ## Stop and remove volumes
 
 load-run: venv ## Headless Locust (USERS, SPAWN, DURATION, LOAD_BASE_URL)
 	@USERS=$${USERS:-30}; SPAWN=$${SPAWN:-3}; DURATION=$${DURATION:-1m}; \
+	HOST=$${LOAD_BASE_URL:-http://quotes.toscrape.com}; \
 	command -v $(VENV_BIN)/locust >/dev/null 2>&1 || $(UV) pip install -e ".[load]"; \
-	$(VENV_BIN)/locust -f tests/load/locustfile.py --headless -u "$$USERS" -r "$$SPAWN" -t "$$DURATION"
+	$(VENV_BIN)/locust -f tests/load/locustfile.py --headless -H "$$HOST" -u "$$USERS" -r "$$SPAWN" -t "$$DURATION"
 
 # --- Shortcuts ---
 
