@@ -14,6 +14,9 @@ make lint          # black+isort+mypy+pylint
 make test          # pytest (markers supported)
 ```
 
+Tooling reference:
+- uv (installer/runner) docs: https://docs.astral.sh/uv/
+
 ## Code quality
 - black, isort, mypy (strict), pylint
 - pre-commit supported: make pre-commit-install
