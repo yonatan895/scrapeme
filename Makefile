@@ -5,7 +5,9 @@
         docs serve-docs docs-clean compose-up compose-down compose-logs compose-ps compose-restart compose-clean \
         k8s-deploy k8s-delete k8s-logs k8s-status k8s-describe k8s-shell k8s-port-forward k8s-restart \
         ci-local pre-commit-install pre-commit-run pre-commit-update quickstart dev check fix watch version version-bump git-tag \
-        info deps-tree deps-outdated health-check diagnose load-run verify-python
+        info deps-tree deps-outdated health-check diagnose load-run verify-python \
+        load-test-health load-test-stress load-test-mixed load-test-fast load-test-external load-test-ci load-test-production \
+        load-test-install load-test-clean load-test-results
 
 .DEFAULT_GOAL := help
 
@@ -33,11 +35,17 @@ PYLINT := $(VENV_BIN)/pylint
 BANDIT := $(VENV_BIN)/bandit
 SAFETY := $(VENV_BIN)/safety
 PRE_COMMIT := $(VENV_BIN)/pre-commit
+LOCUST := $(VENV_BIN)/locust
 DOCKER := docker
 DOCKER_COMPOSE := docker compose
 IMAGE_NAME := scrapeme
 IMAGE_TAG := latest
 REGISTRY := ghcr.io/yonatan895
+
+# Load testing configuration
+LOAD_BASE_URL ?= http://localhost:9090
+LOAD_RESULTS_DIR ?= artifacts/load_tests
+LOCUST_FILE := tests/load/locustfile.py
 
 # Colors (portable via tput; disabled when not a TTY)
 ifneq ($(OS),Windows_NT)
@@ -141,19 +149,125 @@ test-chaos: venv ## Chaos tests
 	@if [ ! -x "$(PYTEST)" ]; then $(UV) pip install -e ".[dev]"; fi
 	@if [ -d "tests/chaos" ]; then $(PYTEST) tests/chaos -v -m chaos || true; else echo "no tests/chaos"; fi
 
+# --- Enhanced Load Testing ---
+
+load-test-install: venv ## Install load testing dependencies
+	@if [ ! -x "$(LOCUST)" ]; then \
+		echo "$(BLUE)Installing load testing dependencies...$(NC)"; \
+		$(UV) pip install -e ".[load]"; \
+	fi
+	@mkdir -p $(LOAD_RESULTS_DIR)
+	@echo "$(GREEN)Load testing setup complete$(NC)"
+
+load-test-health: load-test-install ## Run health check load tests (quick validation)
+	@echo "$(BLUE)Running health check load tests...$(NC)"
+	LOAD_TEST_MODE=health LOAD_BASE_URL=$(LOAD_BASE_URL) \
+	$(LOCUST) -f $(LOCUST_FILE) HealthUser \
+		--users 10 --spawn-rate 2 --run-time 60s \
+		--host $(LOAD_BASE_URL) --headless \
+		--html $(LOAD_RESULTS_DIR)/health_test_report.html \
+		--csv $(LOAD_RESULTS_DIR)/health_test
+	@echo "$(GREEN)Health load tests completed$(NC)"
+
+load-test-stress: load-test-install ## Run stress tests (performance limits)
+	@echo "$(BLUE)Running stress load tests...$(NC)"
+	LOAD_TEST_MODE=stress LOAD_BASE_URL=$(LOAD_BASE_URL) \
+	$(LOCUST) -f $(LOCUST_FILE) StressUser \
+		--users 50 --spawn-rate 10 --run-time 120s \
+		--host $(LOAD_BASE_URL) --headless \
+		--html $(LOAD_RESULTS_DIR)/stress_test_report.html \
+		--csv $(LOAD_RESULTS_DIR)/stress_test
+	@echo "$(GREEN)Stress load tests completed$(NC)"
+
+load-test-mixed: load-test-install ## Run mixed scenario tests
+	@echo "$(BLUE)Running mixed scenario load tests...$(NC)"
+	LOAD_TEST_MODE=mixed LOAD_BASE_URL=$(LOAD_BASE_URL) \
+	$(LOCUST) -f $(LOCUST_FILE) MixedUser \
+		--users 30 --spawn-rate 5 --run-time 180s \
+		--host $(LOAD_BASE_URL) --headless \
+		--html $(LOAD_RESULTS_DIR)/mixed_test_report.html \
+		--csv $(LOAD_RESULTS_DIR)/mixed_test
+	@echo "$(GREEN)Mixed scenario load tests completed$(NC)"
+
+load-test-fast: load-test-install ## Run high-performance tests with FastHttpUser
+	@echo "$(BLUE)Running high-performance load tests...$(NC)"
+	LOAD_TEST_MODE=health LOAD_BASE_URL=$(LOAD_BASE_URL) \
+	$(LOCUST) -f $(LOCUST_FILE) FastHealthUser \
+		--users 100 --spawn-rate 20 --run-time 60s \
+		--host $(LOAD_BASE_URL) --headless \
+		--html $(LOAD_RESULTS_DIR)/fast_test_report.html \
+		--csv $(LOAD_RESULTS_DIR)/fast_test
+	@echo "$(GREEN)High-performance load tests completed$(NC)"
+
+load-test-external: load-test-install ## Run external target tests (requires internet)
+	@echo "$(BLUE)Running external target load tests...$(NC)"
+	LOAD_TEST_MODE=mixed LOAD_BASE_URL=http://quotes.toscrape.com ENABLE_EXTERNAL_TARGETS=true \
+	$(LOCUST) -f $(LOCUST_FILE) ExternalUser \
+		--users 20 --spawn-rate 3 --run-time 300s \
+		--host http://quotes.toscrape.com --headless \
+		--html $(LOAD_RESULTS_DIR)/external_test_report.html \
+		--csv $(LOAD_RESULTS_DIR)/external_test
+	@echo "$(GREEN)External target load tests completed$(NC)"
+
+load-test-ci: load-test-install ## Run CI/CD pipeline tests (quick validation)
+	@echo "$(BLUE)Running CI/CD load tests...$(NC)"
+	LOAD_TEST_MODE=health LOAD_BASE_URL=$(LOAD_BASE_URL) \
+	$(LOCUST) -f $(LOCUST_FILE) HealthUser \
+		--users 5 --spawn-rate 2 --run-time 30s \
+		--host $(LOAD_BASE_URL) --headless \
+		--html $(LOAD_RESULTS_DIR)/ci_test_report.html \
+		--csv $(LOAD_RESULTS_DIR)/ci_test
+	@echo "$(GREEN)CI/CD load tests completed$(NC)"
+
+load-test-production: load-test-install ## Run production-like load tests
+	@echo "$(BLUE)Running production-like load tests...$(NC)"
+	LOAD_TEST_MODE=mixed LOAD_BASE_URL=$(LOAD_BASE_URL) \
+	$(LOCUST) -f $(LOCUST_FILE) \
+		--users 200 --spawn-rate 50 --run-time 600s \
+		--host $(LOAD_BASE_URL) --headless \
+		--html $(LOAD_RESULTS_DIR)/production_test_report.html \
+		--csv $(LOAD_RESULTS_DIR)/production_test
+	@echo "$(GREEN)Production load tests completed$(NC)"
+
+load-test-results: ## Show load test results summary
+	@echo "$(BLUE)=== Load Test Results Summary ===$(NC)"
+	@if [ -d "$(LOAD_RESULTS_DIR)" ]; then \
+		echo "$(BLUE)Results directory:$(NC) $(LOAD_RESULTS_DIR)"; \
+		echo "$(BLUE)HTML Reports:$(NC)"; \
+		ls -la $(LOAD_RESULTS_DIR)/*.html 2>/dev/null || echo "  No HTML reports found"; \
+		echo "$(BLUE)CSV Data:$(NC)"; \
+		ls -la $(LOAD_RESULTS_DIR)/*.csv 2>/dev/null || echo "  No CSV data found"; \
+		echo "$(BLUE)JSON Results:$(NC)"; \
+		ls -la $(LOAD_RESULTS_DIR)/*.json 2>/dev/null || echo "  No JSON results found"; \
+		if [ -f "load_test_results.json" ]; then \
+			echo "$(BLUE)Latest Summary:$(NC)"; \
+			cat load_test_results.json | python3 -m json.tool; \
+		fi; \
+	else \
+		echo "$(YELLOW)No load test results found. Run 'make load-test-health' first.$(NC)"; \
+	fi
+
+load-test-clean: ## Clean load test results
+	@echo "$(YELLOW)Cleaning load test results...$(NC)"
+	@$(RM) $(LOAD_RESULTS_DIR) 2>/dev/null || true
+	@$(RM) load_test_results.json 2>/dev/null || true
+	@echo "$(GREEN)Load test results cleaned$(NC)"
+
+load-run: load-test-health ## Alias for quick load testing
+
 # --- Quality ---
 
 lint: venv ## Run code quality checks
-	@if [ ! -x "$(BLACK)" ] || [ ! -x "$(ISORT)" ] || [ ! -x "$(MYPY)" ] || [ ! -x "$(PYLINT)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
+	@if [ ! -x "$(BLACK)" ] || [ ! -x "$(ISROT)" ] || [ ! -x "$(MYPY)" ] || [ ! -x "$(PYLINT)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
 	$(BLACK) --check --diff core/ config/ infra/ tests/ runner.py
-	$(ISORT) --check-only --diff core/ config/ infra/ tests/ runner.py
+	$(ISROT) --check-only --diff core/ config/ infra/ tests/ runner.py
 	$(MYPY) core/ config/ infra/ runner.py --explicit-package-bases --strict --show-error-codes
 	$(PYLINT) core/ config/ infra/ runner.py --fail-under=8.5
 
 format: venv ## Auto-format code
-	@if [ ! -x "$(BLACK)" ] || [ ! -x "$(ISORT)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
+	@if [ ! -x "$(BLACK)" ] || [ ! -x "$(ISROT)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
 	$(BLACK) core/ config/ infra/ tests/ runner.py
-	$(ISORT) core/ config/ infra/ tests/ runner.py
+	$(ISROT) core/ config/ infra/ tests/ runner.py
 
 type-check: venv ## Type checking report
 	@if [ ! -x "$(MYPY)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
