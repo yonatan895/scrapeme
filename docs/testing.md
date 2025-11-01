@@ -12,6 +12,11 @@ make test-integration
 make test-e2e
 ```
 
+Further reading:
+- Pytest docs: https://docs.pytest.org/
+- Hypothesis docs: https://hypothesis.readthedocs.io/
+- urllib.parse reference (parse_qs, parse_qsl, urlencode): https://docs.python.org/3/library/urllib.parse.html
+
 ## Security & Quality
 ```bash
 make security-check  # bandit + safety
@@ -47,6 +52,11 @@ Results:
 - Reports are written to `artifacts/load_tests` (HTML, CSV). Summarize with:
   - `make load-test-results`.
 
+Learn more:
+- Locust docs: https://docs.locust.io/
+- Writing a locustfile: https://docs.locust.io/en/stable/writing-a-locustfile.html
+- Headless/CLI usage: https://docs.locust.io/en/stable/running-locust-in-non-distributed-mode.html
+
 ### Real application load testing
 
 These targets start the application if needed (via `make load-test-app-start`), then run Locust against the running app.
@@ -64,6 +74,14 @@ Targets:
   - RealMonitoringUser, 15 users, spawn 5/s, 120s; host = APP_BASE_URL.
 - `make load-test-real-browser`
   - BrowserStressUser, 5 users, spawn 1/s, 180s; host = APP_BASE_URL.
+
+Metrics references:
+- Prometheus exposition formats: https://prometheus.io/docs/instrumenting/exposition_formats/
+- Prometheus overview: https://prometheus.io/docs/introduction/overview/
+
+Integration test references:
+- Selenium Grid: https://www.selenium.dev/documentation/grid/
+- Remote WebDriver: https://www.selenium.dev/documentation/webdriver/drivers/remote_webdriver/
 
 Utilities:
 - Start/stop the app used by real-app tests:
