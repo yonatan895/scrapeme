@@ -5,29 +5,62 @@
         docs serve-docs docs-clean compose-up compose-down compose-logs compose-ps compose-restart compose-clean \
         k8s-deploy k8s-delete k8s-logs k8s-status k8s-describe k8s-shell k8s-port-forward k8s-restart \
         ci-local pre-commit-install pre-commit-run pre-commit-update quickstart dev check fix watch version version-bump git-tag \
-        info deps-tree deps-outdated health-check diagnose load-run
+        info deps-tree deps-outdated health-check diagnose load-run verify-python
 
 .DEFAULT_GOAL := help
 
-# Cross-platform
+# Cross-platform OS detection with improved Python discovery
 ifeq ($(OS),Windows_NT)
+    DETECTED_OS := Windows
     VENV_BIN := .venv/Scripts
     PYTHON := python
+    VENV_PYTHON := $(VENV_BIN)/python.exe
     RM := rmdir /s /q
-    SEP := \
+    SEP := \\
 else
+    UNAME_S := $(shell uname -s)
+    ifeq ($(UNAME_S),Darwin)
+        DETECTED_OS := macOS
+    else
+        DETECTED_OS := Linux
+    endif
     VENV_BIN := .venv/bin
     PYTHON := python3
+    VENV_PYTHON := $(VENV_BIN)/python
     RM := rm -rf
     SEP := /
 endif
 
-# Tools
+# Function to find the correct Python executable in venv
+# This handles cases where python, python3, or python3.x might be the actual executable
+define find_venv_python
+$(shell \
+    if [ -x "$(VENV_BIN)/python" ]; then \
+        echo "$(VENV_BIN)/python"; \
+    elif [ -x "$(VENV_BIN)/python3" ]; then \
+        echo "$(VENV_BIN)/python3"; \
+    elif [ -x "$(VENV_BIN)/python3.12" ]; then \
+        echo "$(VENV_BIN)/python3.12"; \
+    elif [ -x "$(VENV_BIN)/python3.11" ]; then \
+        echo "$(VENV_BIN)/python3.11"; \
+    elif [ -x "$(VENV_BIN)/python3.10" ]; then \
+        echo "$(VENV_BIN)/python3.10"; \
+    elif [ -x "$(VENV_BIN)/python3.9" ]; then \
+        echo "$(VENV_BIN)/python3.9"; \
+    else \
+        echo ""; \
+    fi \
+)
+endef
+
+# Tools with improved Python resolution
 VENV := .venv
 UV := uv
+# Use dynamic Python discovery for all venv tools
+VENV_PYTHON_EXEC = $(call find_venv_python)
 PYTEST := $(VENV_BIN)/pytest
 BLACK := $(VENV_BIN)/black
-ISORT := $(VENV_BIN)/isort
+ISORY := $(VENV_BIN)/isort
 MYPY := $(VENV_BIN)/mypy
 PYLINT := $(VENV_BIN)/pylint
 BANDIT := $(VENV_BIN)/bandit
@@ -71,13 +104,32 @@ help: ## Show help
 # --- Environment & Dependencies ---
 
 check-uv: ## Ensure UV is installed
-	@command -v $(UV) >/dev/null 2>&1 || { echo "Install UV: https://astral.sh/uv"; exit 1; }
+	@command -v $(UV) >/dev/null 2>&1 || { echo "$(RED)Error: UV not found. Install UV: https://astral.sh/uv$(NC)"; exit 1; }
+
+# Verify Python executable in virtual environment
+verify-python: venv ## Verify Python executable exists in venv
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	if [ -z "$$PYTHON_EXEC" ]; then \
+		echo "$(RED)Error: No Python executable found in $(VENV_BIN)/$(NC)"; \
+		echo "$(YELLOW)Available files in $(VENV_BIN)/:$(NC)"; \
+		ls -la $(VENV_BIN)/ 2>/dev/null || echo "$(RED)Directory does not exist$(NC)"; \
+		echo "$(YELLOW)Trying to recreate virtual environment...$(NC)"; \
+		$(MAKE) venv-clear; \
+		PYTHON_EXEC="$(call find_venv_python)"; \
+		if [ -z "$$PYTHON_EXEC" ]; then \
+			echo "$(RED)Failed to create working virtual environment$(NC)"; \
+			exit 1; \
+		fi; \
+	fi; \
+	echo "$(GREEN)Python executable found: $$PYTHON_EXEC$(NC)"; \
+	$$PYTHON_EXEC --version
 
 # Create venv only if missing (no prompt)
 venv: ## Create virtual environment if it doesn't exist
 	@if [ -d "$(VENV)" ]; then \
 		echo "$(YELLOW)venv exists$(NC)"; \
 	else \
+		echo "$(BLUE)Creating virtual environment...$(NC)"; \
 		$(UV) venv; \
 		echo "$(GREEN)venv created$(NC)"; \
 	fi
@@ -85,24 +137,25 @@ venv: ## Create virtual environment if it doesn't exist
 # Explicit venv recreation (no prompt)
 venv-clear: ## Recreate virtual environment (destructive)
 	@echo "$(YELLOW)Recreating venv...$(NC)"
-	UV_VENV_CLEAR=1 $(UV) venv --clear
+	@if [ -d "$(VENV)" ]; then $(RM) $(VENV); fi
+	$(UV) venv
 	@echo "$(GREEN)venv recreated$(NC)"
 
-install: check-uv venv ## Install prod deps
+install: check-uv venv verify-python ## Install prod deps
 	$(UV) pip install -e .
 
-install-dev: check-uv venv ## Install dev deps
+install-dev: check-uv venv verify-python ## Install dev deps
 	$(UV) pip install -e ".[dev,lint]"
 
-install-all: check-uv venv ## Install all deps
+install-all: check-uv venv verify-python ## Install all deps
 	$(UV) pip install -e .
 	$(UV) pip install -e ".[dev,lint,security,load,docs]"
 	@command -v $(PRE_COMMIT) >/dev/null 2>&1 && $(PRE_COMMIT) install || true
 
-sync: check-uv venv ## Sync env to pyproject
+sync: check-uv venv verify-python ## Sync env to pyproject
 	$(UV) pip sync
 
-upgrade: check-uv venv ## Upgrade all deps
+upgrade: check-uv venv verify-python ## Upgrade all deps
 	$(UV) pip install --upgrade -e ".[all]" || true
 
 compile-requirements: check-uv ## Regenerate requirements files
@@ -110,62 +163,80 @@ compile-requirements: check-uv ## Regenerate requirements files
 	$(UV) pip compile pyproject.toml --extra dev --extra lint -o requirements-dev.txt
 	$(UV) pip compile pyproject.toml --all-extras -o requirements-all.txt
 
-verify-install: venv ## Quick import smoke
-	$(VENV_BIN)/python -c "import selenium, tenacity, yaml; print('OK')"
+verify-install: verify-python ## Quick import smoke test with robust Python detection
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	if [ -z "$$PYTHON_EXEC" ]; then \
+		echo "$(RED)Error: No Python executable found in virtual environment$(NC)"; \
+		echo "$(YELLOW)Run 'make venv-clear' to recreate the virtual environment$(NC)"; \
+		exit 1; \
+	fi; \
+	echo "$(BLUE)Testing Python imports with: $$PYTHON_EXEC$(NC)"; \
+	$$PYTHON_EXEC -c "import selenium, tenacity, yaml; print('$(GREEN)✓ All imports successful$(NC)')"
 
 # --- Testing ---
 
-test: venv ## Run all tests with coverage
+test: verify-python ## Run all tests with coverage
 	@if [ ! -x "$(PYTEST)" ]; then $(UV) pip install -e ".[dev]"; fi
-	$(PYTEST) -v --cov=core --cov=config --cov=infra --cov-report=term-missing:skip-covered
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	$$PYTHON_EXEC -m pytest -v --cov=core --cov=config --cov=infra --cov-report=term-missing:skip-covered
 
-test-unit: venv ## Unit tests only
+test-unit: verify-python ## Unit tests only
 	@if [ ! -x "$(PYTEST)" ]; then $(UV) pip install -e ".[dev]"; fi
-	@if [ -d "tests/unit" ]; then $(PYTEST) tests/unit -v -m unit || true; else echo "no tests/unit"; fi
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	if [ -d "tests/unit" ]; then $$PYTHON_EXEC -m pytest tests/unit -v -m unit || true; else echo "no tests/unit"; fi
 
-test-integration: venv ## Integration tests
+test-integration: verify-python ## Integration tests
 	@if [ ! -x "$(PYTEST)" ]; then $(UV) pip install -e ".[dev]"; fi
-	@if [ -d "tests/integration" ]; then $(PYTEST) tests/integration -v -m integration || true; else echo "no tests/integration"; fi
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	if [ -d "tests/integration" ]; then $$PYTHON_EXEC -m pytest tests/integration -v -m integration || true; else echo "no tests/integration"; fi
 
-test-e2e: venv ## End-to-end tests
+test-e2e: verify-python ## End-to-end tests
 	@if [ ! -x "$(PYTEST)" ]; then $(UV) pip install -e ".[dev]"; fi
-	@if [ -d "tests/e2e" ]; then $(PYTEST) tests/e2e -v -m e2e --timeout=300 || true; else echo "no tests/e2e"; fi
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	if [ -d "tests/e2e" ]; then $$PYTHON_EXEC -m pytest tests/e2e -v -m e2e --timeout=300 || true; else echo "no tests/e2e"; fi
 
-test-property: venv ## Property-based tests
+test-property: verify-python ## Property-based tests
 	@if [ ! -x "$(PYTEST)" ]; then $(UV) pip install -e ".[dev]"; fi
-	@if [ -d "tests/property" ]; then $(PYTEST) tests/property -v -m property || true; else echo "no tests/property"; fi
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	if [ -d "tests/property" ]; then $$PYTHON_EXEC -m pytest tests/property -v -m property || true; else echo "no tests/property"; fi
 
-test-load: venv ## Load tests marker
+test-load: verify-python ## Load tests marker
 	@if [ ! -x "$(PYTEST)" ]; then $(UV) pip install -e ".[dev]"; fi
-	@if [ -d "tests/load" ]; then $(PYTEST) tests/load -v -m load || true; else echo "no tests/load"; fi
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	if [ -d "tests/load" ]; then $$PYTHON_EXEC -m pytest tests/load -v -m load || true; else echo "no tests/load"; fi
 
-test-chaos: venv ## Chaos tests
+test-chaos: verify-python ## Chaos tests
 	@if [ ! -x "$(PYTEST)" ]; then $(UV) pip install -e ".[dev]"; fi
-	@if [ -d "tests/chaos" ]; then $(PYTEST) tests/chaos -v -m chaos || true; else echo "no tests/chaos"; fi
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	if [ -d "tests/chaos" ]; then $$PYTHON_EXEC -m pytest tests/chaos -v -m chaos || true; else echo "no tests/chaos"; fi
 
 # --- Quality ---
 
-lint: venv ## Run code quality checks
+lint: verify-python ## Run code quality checks
 	@if [ ! -x "$(BLACK)" ] || [ ! -x "$(ISORT)" ] || [ ! -x "$(MYPY)" ] || [ ! -x "$(PYLINT)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
-	$(BLACK) --check --diff core/ config/ infra/ tests/ runner.py
-	$(ISORT) --check-only --diff core/ config/ infra/ tests/ runner.py
-	$(MYPY) core/ config/ infra/ runner.py --explicit-package-bases --strict --show-error-codes
-	$(PYLINT) core/ config/ infra/ runner.py --fail-under=8.5
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	$$PYTHON_EXEC -m black --check --diff core/ config/ infra/ tests/ runner.py; \
+	$$PYTHON_EXEC -m isort --check-only --diff core/ config/ infra/ tests/ runner.py; \
+	$$PYTHON_EXEC -m mypy core/ config/ infra/ runner.py --explicit-package-bases --strict --show-error-codes; \
+	$$PYTHON_EXEC -m pylint core/ config/ infra/ runner.py --fail-under=8.5
 
-format: venv ## Auto-format code
+format: verify-python ## Auto-format code
 	@if [ ! -x "$(BLACK)" ] || [ ! -x "$(ISORT)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
-	$(BLACK) core/ config/ infra/ tests/ runner.py
-	$(ISORT) core/ config/ infra/ tests/ runner.py
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	$$PYTHON_EXEC -m black core/ config/ infra/ tests/ runner.py; \
+	$$PYTHON_EXEC -m isort core/ config/ infra/ tests/ runner.py
 
-type-check: venv ## Type checking report
+type-check: verify-python ## Type checking report
 	@if [ ! -x "$(MYPY)" ]; then $(UV) pip install -e ".[dev,lint]"; fi
-	$(MYPY) core/ config/ infra/ runner.py --explicit-package-bases --strict --show-error-codes
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	$$PYTHON_EXEC -m mypy core/ config/ infra/ runner.py --explicit-package-bases --strict --show-error-codes
 
-security-check: venv ## Security scans (bandit + safety)
+security-check: verify-python ## Security scans (bandit + safety)
 	@if [ ! -x "$(BANDIT)" ]; then $(UV) pip install -e ".[security]"; fi
-	$(BANDIT) -r core/ config/ infra/ runner.py -ll -f json -o bandit-report.json || true
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	$$PYTHON_EXEC -m bandit -r core/ config/ infra/ runner.py -ll -f json -o bandit-report.json || true
 	@if [ ! -x "$(SAFETY)" ]; then $(UV) pip install -e ".[security]"; fi
-	$(SAFETY) check --json --output safety-report.json --continue-on-error || true
+	@$$PYTHON_EXEC -m safety check --json --output safety-report.json --continue-on-error || true
 
 # --- Docker & Compose (extended) ---
 
@@ -208,10 +279,11 @@ compose-restart: ## Restart Docker Compose stack
 
 # --- Documentation ---
 
-docs: venv ## Build Sphinx docs (if present)
+docs: verify-python ## Build Sphinx docs (if present)
 	@if [ -d "docs" ]; then \
-		command -v $(VENV_BIN)/sphinx-build >/dev/null 2>&1 || $(UV) pip install -e ".[docs]"; \
-		cd docs && $(VENV_BIN)/sphinx-build -b html . _build/html; \
+		PYTHON_EXEC="$(call find_venv_python)"; \
+		command -v $$PYTHON_EXEC >/dev/null 2>&1 || $(UV) pip install -e ".[docs]"; \
+		cd docs && $$PYTHON_EXEC -m sphinx -b html . _build/html; \
 	else echo "no docs/ directory"; fi
 
 serve-docs: docs ## Serve docs locally (http://localhost:8000)
@@ -225,11 +297,12 @@ docs-clean: ## Clean docs build
 
 # --- Load testing ---
 
-load-run: venv ## Headless Locust (USERS, SPAWN, DURATION, LOAD_BASE_URL)
+load-run: verify-python ## Headless Locust (USERS, SPAWN, DURATION, LOAD_BASE_URL)
 	@USERS=$${USERS:-30}; SPAWN=$${SPAWN:-3}; DURATION=$${DURATION:-1m}; \
 	HOST=$${LOAD_BASE_URL:-http://quotes.toscrape.com}; \
-	command -v $(VENV_BIN)/locust >/dev/null 2>&1 || $(UV) pip install -e ".[load]"; \
-	$(VENV_BIN)/locust -f tests/load/locustfile.py --headless -H "$$HOST" -u "$$USERS" -r "$$SPAWN" -t "$$DURATION"
+	PYTHON_EXEC="$(call find_venv_python)"; \
+	command -v $$PYTHON_EXEC >/dev/null 2>&1 || $(UV) pip install -e ".[load]"; \
+	$$PYTHON_EXEC -m locust -f tests/load/locustfile.py --headless -H "$$HOST" -u "$$USERS" -r "$$SPAWN" -t "$$DURATION"
 
 # --- Kubernetes (placeholders; non-fatal) ---
 
@@ -265,28 +338,38 @@ ci-local: ## Run local CI checks (format + lint + unit)
 	$(MAKE) test-unit
 	@echo "$(GREEN)Local CI checks passed$(NC)"
 
-pre-commit-run: venv ## Run pre-commit hooks (non-fatal)
-	@command -v $(PRE_COMMIT) >/dev/null 2>&1 && $(PRE_COMMIT) run --all-files || true
+pre-commit-run: verify-python ## Run pre-commit hooks (non-fatal)
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	command -v $$PYTHON_EXEC >/dev/null 2>&1 && $$PYTHON_EXEC -m pre_commit run --all-files || true
 
-pre-commit-update: venv ## Update pre-commit hooks (non-fatal)
-	@command -v $(PRE_COMMIT) >/dev/null 2>&1 && $(PRE_COMMIT) autoupdate || true
+pre-commit-update: verify-python ## Update pre-commit hooks (non-fatal)
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	command -v $$PYTHON_EXEC >/dev/null 2>&1 && $$PYTHON_EXEC -m pre_commit autoupdate || true
 
 fix: format ## Alias to auto-format
 
 # --- Project Info & Diagnostics ---
 
 version: ## Show version info
+	@echo "$(BLUE)OS:$(NC) $(DETECTED_OS)"
 	@echo "$(BLUE)Python:$(NC) $$($(PYTHON) --version)"
 	@echo "$(BLUE)UV:$(NC) $$($(UV) --version 2>/dev/null || echo 'not installed')"
 	@echo "$(BLUE)Docker:$(NC) $$($(DOCKER) --version 2>/dev/null || echo 'not installed')"
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	if [ -n "$$PYTHON_EXEC" ]; then \
+		echo "$(BLUE)Venv Python:$(NC) $$($$PYTHON_EXEC --version)"; \
+	else \
+		echo "$(BLUE)Venv Python:$(NC) $(RED)not found$(NC)"; \
+	fi
 	@if [ -f "pyproject.toml" ]; then \
 		VER=$$(grep '^version' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
 		echo "$(BLUE)Project:$(NC) $$VER"; \
 	fi
 
-version-bump: venv ## Bump version (patch)
-	@command -v $(VENV_BIN)/bump2version >/dev/null 2>&1 || $(UV) pip install bump2version
-	$(VENV_BIN)/bump2version patch
+version-bump: verify-python ## Bump version (patch)
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	command -v $$PYTHON_EXEC >/dev/null 2>&1 || $(UV) pip install bump2version; \
+	$$PYTHON_EXEC -m bump2version patch
 
 git-tag: ## Create annotated git tag from pyproject version
 	@if [ -f "pyproject.toml" ]; then \
@@ -298,24 +381,43 @@ git-tag: ## Create annotated git tag from pyproject version
 info: ## Show project/environment info
 	@echo "$(BLUE)=== Project Information ===$(NC)"
 	@echo "$(BLUE)Repository:$(NC) $$(basename $$(pwd))"
+	@echo "$(BLUE)OS:$(NC) $(DETECTED_OS)"
 	@echo "$(BLUE)Python:$(NC) $$($(PYTHON) --version)"
 	@echo "$(BLUE)Virtual Env:$(NC) $$(if [ -d $(VENV) ]; then echo 'exists'; else echo 'missing'; fi)"
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	if [ -n "$$PYTHON_EXEC" ]; then \
+		echo "$(BLUE)Venv Python:$(NC) $$PYTHON_EXEC ($$($$PYTHON_EXEC --version))"; \
+	else \
+		echo "$(BLUE)Venv Python:$(NC) $(RED)not found$(NC)"; \
+	fi
 	@echo "$(BLUE)Git Branch:$(NC) $$(git branch --show-current 2>/dev/null || echo 'unknown')"
 	@echo "$(BLUE)Docker:$(NC) $$($(DOCKER) --version 2>/dev/null || echo 'not installed')"
 
-deps-tree: venv ## Show dependency tree
-	@command -v $(VENV_BIN)/pipdeptree >/dev/null 2>&1 || $(UV) pip install pipdeptree
-	$(VENV_BIN)/pipdeptree
+deps-tree: verify-python ## Show dependency tree
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	command -v $$PYTHON_EXEC >/dev/null 2>&1 || $(UV) pip install pipdeptree; \
+	$$PYTHON_EXEC -m pipdeptree
 
 deps-outdated: venv ## Show outdated dependencies
 	$(UV) pip list --outdated
 
-health-check: venv ## Basic health check
+health-check: verify-python ## Basic health check
 	@echo "$(BLUE)=== Health Check ===$(NC)"
-	@echo -n "$(BLUE)Python imports:$(NC) "; $(VENV_BIN)/python -c "import core.scraper, config.models; print('✓')" 2>/dev/null || echo "✗"
-	@echo -n "$(BLUE)Selenium:$(NC) "; $(VENV_BIN)/python -c "import selenium; print('✓')" 2>/dev/null || echo "✗"
-	@echo -n "$(BLUE)Tests dir:$(NC) "; if [ -d "tests" ]; then echo "✓"; else echo "✗"; fi
-	@echo -n "$(BLUE)Docker:$(NC) "; $(DOCKER) --version >/dev/null 2>&1 && echo "✓" || echo "✗"
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	echo -n "$(BLUE)Python imports:$(NC) "; \
+	if $$PYTHON_EXEC -c "import core.scraper, config.models; print('✓')" 2>/dev/null; then \
+		echo "$(GREEN)✓$(NC)"; \
+	else \
+		echo "$(RED)✗$(NC)"; \
+	fi
+	@echo -n "$(BLUE)Selenium:$(NC) "; \
+	if $$PYTHON_EXEC -c "import selenium; print('✓')" 2>/dev/null; then \
+		echo "$(GREEN)✓$(NC)"; \
+	else \
+		echo "$(RED)✗$(NC)"; \
+	fi
+	@echo -n "$(BLUE)Tests dir:$(NC) "; if [ -d "tests" ]; then echo "$(GREEN)✓$(NC)"; else echo "$(RED)✗$(NC)"; fi
+	@echo -n "$(BLUE)Docker:$(NC) "; $(DOCKER) --version >/dev/null 2>&1 && echo "$(GREEN)✓$(NC)" || echo "$(RED)✗$(NC)"
 
 diagnose: health-check info ## Full diagnostics
 
@@ -330,5 +432,6 @@ dev: install-all pre-commit-install ## Setup dev env
 check: format lint test-unit ## Pre-commit validation
 	@echo "$(GREEN)Checks passed$(NC)"
 
-pre-commit-install: venv ## Install pre-commit hooks
-	@command -v $(PRE_COMMIT) >/dev/null 2>&1 && $(PRE_COMMIT) install || true
+pre-commit-install: verify-python ## Install pre-commit hooks
+	@PYTHON_EXEC="$(call find_venv_python)"; \
+	command -v $$PYTHON_EXEC >/dev/null 2>&1 && $$PYTHON_EXEC -m pre_commit install || true
