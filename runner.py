@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 import time
@@ -15,11 +16,12 @@ from config.models import SiteConfig
 from core.auth import AuthFlow
 from core.browser import BrowserManager
 from core.circuit_breaker import CircuitBreakerRegistry, CircuitState
-from core.exceptions import AutomationError, ErrorContext
+from core.exceptions import AutomationError
 from core.metrics import Metrics
 from core.scraper import SiteScraper
 from core.secrets import EnvSecrets
-from core.serialization import dumps_bytes, dumps_str, pretty_dumps
+from core.serialization import dumps as fast_dumps
+from core.serialization import to_jsonable
 from core.waits import Waiter
 from infra.health import HealthRegistry, HealthStatus
 from infra.logging_config import configure_logging
@@ -39,8 +41,8 @@ def format_error_result(site_name: str, error: Exception) -> dict[str, Any]:
         },
     }
 
-    ctx: ErrorContext | None = getattr(error, "context", None) if isinstance(error, AutomationError) else None
-    if ctx is not None:
+    if isinstance(error, AutomationError) and error.context:
+        ctx = error.context
         context_data: dict[str, Any] = {
             k: v
             for k, v in {
@@ -52,10 +54,8 @@ def format_error_result(site_name: str, error: Exception) -> dict[str, Any]:
             }.items()
             if v is not None
         }
-        # Support optional extra mapping if present
-        extra = getattr(ctx, "extra", None)
-        if extra:
-            context_data["extra"] = dict(extra)
+        if ctx.extra:
+            context_data["extra"] = dict(ctx.extra)
         if context_data:
             result["error"]["context"] = context_data
 
@@ -137,9 +137,9 @@ def process_site(
 
             return {"site": site.name, "data": data}
 
-    except Exception:
+    except Exception as e:
         duration = time.monotonic() - start_time
-        Metrics.record_scrape_failure(site.name, duration, "UnhandledException")
+        Metrics.record_scrape_failure(site.name, duration, type(e).__name__)
         circuit_breaker.record_failure()
         raise
 
@@ -191,7 +191,7 @@ def main() -> int:
     try:
         sites = load_sites(args.config)
         logger.info(f"Loaded {len(sites)} sites")
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to load configuration")
         return 1
 
@@ -206,6 +206,7 @@ def main() -> int:
     max_workers = min(args.max_workers, max(1, len(sites)))
 
     if args.jsonl:
+        # Stream JSON lines as results become available
         try:
             with args.out.open("wb") as fp:
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -242,13 +243,14 @@ def main() -> int:
                             logger.exception(f"✗ Unhandled error on {site_name}")
                             result = format_error_result(site_name, e)
 
-                        fp.write(dumps_bytes(result))
+                        fp.write(fast_dumps(to_jsonable(result)))
                         fp.write(b"\n")
         except Exception:
             logger.exception("Failed to write results")
             return 1
         return 0
 
+    # Default: collect in-memory and dump once (compact by default)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(
@@ -285,8 +287,8 @@ def main() -> int:
                 results.append(format_error_result(site_name, e))
 
     try:
-        output_text = pretty_dumps(results) if args.pretty else dumps_str(results)
-        args.out.write_text(output_text)
+        output_bytes = fast_dumps(to_jsonable(results), pretty=args.pretty)
+        args.out.write_bytes(output_bytes)
         logger.info(f"Results written to {args.out}")
     except Exception:
         logger.exception("Failed to write results")
