@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from core.serialization import to_jsonable, dumps
+from core.serialization import dumps, to_jsonable
 
 
 class Color(Enum):

@@ -20,7 +20,8 @@ from core.exceptions import AutomationError
 from core.metrics import Metrics
 from core.scraper import SiteScraper
 from core.secrets import EnvSecrets
-from core.serialization import to_jsonable, dumps as fast_dumps
+from core.serialization import dumps as fast_dumps
+from core.serialization import to_jsonable
 from core.waits import Waiter
 from infra.health import HealthRegistry, HealthStatus
 from infra.logging_config import configure_logging
@@ -164,7 +165,9 @@ def main() -> int:
     parser.add_argument("--no-artifacts", action="store_true")
     parser.add_argument("--enable-pooling", action="store_true")
     parser.add_argument("--metrics-port", type=int, default=9090)
-    parser.add_argument("--jsonl", action="store_true", help="Write JSONL output (one line per site)")
+    parser.add_argument(
+        "--jsonl", action="store_true", help="Write JSONL output (one line per site)"
+    )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output (slower)")
 
     args = parser.parse_args()

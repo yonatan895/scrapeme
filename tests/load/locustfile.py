@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from locust import HttpUser, task, between, events
 import json
-from pathlib import Path
 import os
+from pathlib import Path
+
+from locust import HttpUser, between, events, task
 
 # This Locust test drives the runner via HTTP by invoking a lightweight Flask wrapper is not present.
 # Instead, we will simulate load by calling a tiny endpoint if user exposes one, else we perform headless GETs
