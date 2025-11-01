@@ -16,7 +16,6 @@ Web scraping and automation framework built with Selenium.
   
 - This has been mainly tested on Linux (`Ubuntu`), so it is recommended to run the project in a Linux/WSL based environment. It is discourged to use native Windows/MacOs, as there are minimal guarantees for it to be working.
 
-- 
 
 ## Quick start
 ```bash
@@ -26,6 +25,7 @@ python runner.py --config config/sites.yaml --headless --out results.json
 ```
 
 ## Common make targets
+```bash
 - make venv / make venv-clear
 - make install-all / make verify-install
 - make format / make lint / make check / make test
@@ -33,19 +33,20 @@ python runner.py --config config/sites.yaml --headless --out results.json
 - make load-run   # headless Locust; see docs/testing.md
 - docker: make docker-build / docker-run / docker-shell
 - compose: make compose-up / compose-down / compose-logs / compose-restart
+```
 
 
-Adjust environment via .env (see .env.example) and tune resource limits as needed.
+Adjust environment via `.env` (see `.env.example`) and tune resource limits as needed.
 
 ## Observability
-- Metrics on port 9090 (Prometheus format)
-- Health endpoints via infra/server.py:
-  - /healthz (liveness)
-  - /ready (readiness)
+- Metrics on port `9090` (Prometheus format)
+- Health endpoints via `infra/server.py`:
+  - `/healthz` (liveness)
+  - `/ready` (readiness)
 
 ## Project layout
-- core/    — scraping, browser/session mgmt, waits, metrics
-- config/  — typed config loader and models
-- infra/   — logging, signals, health server
-- tests/   — test suites
-- docs/    — documentation
+- `core/`    — scraping, browser/session mgmt, waits, metrics
+- `config/`  — typed config loader and models
+- `infra/`   — logging, signals, health server
+- `tests/`   — test suites
+- `docs/`    — documentation
