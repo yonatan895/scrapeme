@@ -60,7 +60,7 @@ UV := uv
 VENV_PYTHON_EXEC = $(call find_venv_python)
 PYTEST := $(VENV_BIN)/pytest
 BLACK := $(VENV_BIN)/black
-ISORY := $(VENV_BIN)/isort
+ISORT := $(VENV_BIN)/isort
 MYPY := $(VENV_BIN)/mypy
 PYLINT := $(VENV_BIN)/pylint
 BANDIT := $(VENV_BIN)/bandit
@@ -368,7 +368,7 @@ version: ## Show version info
 
 version-bump: verify-python ## Bump version (patch)
 	@PYTHON_EXEC="$(call find_venv_python)"; \
-	command -v $$PYTHON_EXEC >/dev/null 2>&1 || $(UV) pip install bump2version; \
+	$(UV) pip show bump2version >/dev/null 2>&1 || $(UV) pip install bump2version; \
 	$$PYTHON_EXEC -m bump2version patch
 
 git-tag: ## Create annotated git tag from pyproject version
@@ -394,8 +394,13 @@ info: ## Show project/environment info
 	@echo "$(BLUE)Docker:$(NC) $$($(DOCKER) --version 2>/dev/null || echo 'not installed')"
 
 deps-tree: verify-python ## Show dependency tree
+	@echo "$(BLUE)Checking for pipdeptree...$(NC)"
 	@PYTHON_EXEC="$(call find_venv_python)"; \
-	command -v $$PYTHON_EXEC >/dev/null 2>&1 || $(UV) pip install pipdeptree; \
+	if ! $$PYTHON_EXEC -m pipdeptree --version >/dev/null 2>&1; then \
+		echo "$(YELLOW)Installing pipdeptree...$(NC)"; \
+		$(UV) pip install pipdeptree; \
+	fi; \
+	echo "$(BLUE)Generating dependency tree...$(NC)"; \
 	$$PYTHON_EXEC -m pipdeptree
 
 deps-outdated: venv ## Show outdated dependencies
