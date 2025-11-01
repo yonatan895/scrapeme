@@ -25,22 +25,6 @@ python runner.py --config config/sites.yaml --headless --out results.json
 - docker: make docker-build / docker-run / docker-shell
 - compose: make compose-up / compose-down / compose-logs / compose-restart
 
-## Docker
-- Multi-stage Dockerfile with wheel build cache
-- Targets: production, dev, test
-```bash
-make docker-build
-make docker-run
-```
-
-## Docker Compose
-A production-oriented compose file is provided.
-```bash
-docker compose -f docker-compose.production.yaml up -d
-# logs
-docker compose -f docker-compose.production.yaml logs -f
-# stop
-docker compose -f docker-compose.production.yaml down
 ```
 Adjust environment via .env (see .env.example) and tune resource limits as needed.
 
