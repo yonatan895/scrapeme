@@ -5,14 +5,14 @@ from __future__ import annotations
 import json
 import logging
 import os
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
 import pytest
-import urllib.request
 from selenium import webdriver
+from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.common.exceptions import WebDriverException, TimeoutException
 
 from config.models import FieldConfig, SiteConfig, StepBlock
 from core.scraper import SiteScraper
