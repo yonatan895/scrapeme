@@ -1,4 +1,4 @@
-name: CI/CD Pipeline (optimized)
+name: CI/CD Pipeline
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
   # Fast code checks (no Docker)
   # ------------------------------
   lint_types_unit:
-    name: Lint, Types, Unit (cached)
+    name: Lint, Types, Unit
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -102,7 +102,7 @@ jobs:
   # Conditional integration (compose)
   # -------------------------------------
   integration:
-    name: Integration (conditional)
+    name: Integration
     needs: [lint_types_unit, changes]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -172,7 +172,7 @@ jobs:
   # Build image with GHCR cache
   # -------------------------------------
   docker_build:
-    name: Build image (GHCR cache)
+    name: Build image
     needs: lint_types_unit
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -198,7 +198,7 @@ jobs:
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build (push only on main)
+      - name: Build 
         uses: docker/build-push-action@v6
         with:
           context: .
