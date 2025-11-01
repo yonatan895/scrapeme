@@ -62,19 +62,19 @@ sites:
 
 ```bash
 # Basic scraping
-python runner.py --config sites.yaml --headless
+python runner.py --config config/sites.yaml --headless
 
 # With custom output and artifacts
-python runner.py --config sites.yaml --out data.json --artifact-dir ./captures
+python runner.py --config config/sites.yaml --out data.json --artifact-dir ./captures
 
 # Parallel execution
-python runner.py --config sites.yaml --max-workers 8
+python runner.py --config config/sites.yaml --max-workers 8
 
 # Streaming JSONL output
-python runner.py --config sites.yaml --jsonl --out results.jsonl
+python runner.py --config config/sites.yaml --jsonl --out results.jsonl
 
 # Daemon mode for Kubernetes
-python runner.py --config sites.yaml --daemon --metrics-port 9090
+python runner.py --config config/sites.yaml --daemon --metrics-port 9090
 ```
 
 ## Development
