@@ -36,9 +36,7 @@ def valid_urls(draw):
 def url_safe_params(draw):
     """Generate URL-safe query parameters."""
     # RFC 3986 unreserved: A-Z a-z 0-9 - . _ ~
-    safe_chars = st.characters(
-        whitelist_categories=("Ll", "Lu", "Nd"), whitelist_characters="-._~"
-    )
+    safe_chars = st.characters(whitelist_categories=("Ll", "Lu", "Nd"), whitelist_characters="-._~")
     return draw(
         st.dictionaries(
             st.text(alphabet=safe_chars, min_size=1, max_size=10),

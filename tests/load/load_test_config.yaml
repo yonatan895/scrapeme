@@ -101,7 +101,7 @@ production_test:
 
 # Usage examples:
 # 1. Basic health check: make load-test-health
-# 2. Stress test: make load-test-stress  
+# 2. Stress test: make load-test-stress
 # 3. Mixed scenarios: make load-test-mixed
 # 4. Fast performance: make load-test-fast
 # 5. External targets: make load-test-external

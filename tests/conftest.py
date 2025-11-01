@@ -9,12 +9,7 @@ import pytest
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 
-from config.models import (
-    FieldConfig,
-    LoginConfig,
-    SiteConfig,
-    StepBlock,
-)
+from config.models import FieldConfig, LoginConfig, SiteConfig, StepBlock
 from core.secrets import EnvSecrets
 from core.waits import Waiter
 

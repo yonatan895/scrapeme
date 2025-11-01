@@ -3,7 +3,7 @@ sites:
     base_url: "http://quotes.toscrape.com/"
     wait_timeout_sec: 20
     page_load_timeout_sec: 30
-    
+
     steps:
       # Extract first quote
       - name: extract_quote_1
@@ -12,13 +12,13 @@ sites:
         fields:
           - name: quote_text
             xpath: "//div[@class='quote'][1]//span[@class='text']"
-          
+
           - name: author
             xpath: "//div[@class='quote'][1]//small[@class='author']"
-          
+
           - name: tags
             xpath: "//div[@class='quote'][1]//a[@class='tag']"
-      
+
       # Extract second quote
       - name: extract_quote_2
         goto_url: "/"
@@ -26,13 +26,13 @@ sites:
         fields:
           - name: quote_text
             xpath: "//div[@class='quote'][2]//span[@class='text']"
-          
+
           - name: author
             xpath: "//div[@class='quote'][2]//small[@class='author']"
-          
+
           - name: tags
             xpath: "//div[@class='quote'][2]//a[@class='tag']"
-      
+
       # Extract third quote
       - name: extract_quote_3
         goto_url: "/"
@@ -40,10 +40,9 @@ sites:
         fields:
           - name: quote_text
             xpath: "//div[@class='quote'][3]//span[@class='text']"
-          
+
           - name: author
             xpath: "//div[@class='quote'][3]//small[@class='author']"
-          
+
           - name: tags
             xpath: "//div[@class='quote'][3]//a[@class='tag']"
-

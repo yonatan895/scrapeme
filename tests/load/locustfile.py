@@ -99,7 +99,7 @@ class StressTestTaskSet(TaskSet):
         """Rapid-fire health checks to test concurrency."""
         endpoints = ["/healthz", "/ready"]
         endpoint = random.choice(endpoints)
-        
+
         with self.client.get(endpoint, name=f"STRESS {endpoint}", catch_response=True) as resp:
             if resp.status_code != 200:
                 self.error_count += 1
@@ -117,7 +117,7 @@ class StressTestTaskSet(TaskSet):
         with self.client.get("/metrics", name="STRESS /metrics", catch_response=True) as resp:
             if resp.status_code == 200:
                 # Simulate metrics parsing work
-                lines = resp.text.count('\n')
+                lines = resp.text.count("\n")
                 if lines < 10:
                     resp.failure("Insufficient metrics data")
             else:
@@ -129,8 +129,10 @@ class StressTestTaskSet(TaskSet):
         # Simulate various failure scenarios
         endpoints = ["/nonexistent", "/error", "/timeout"]
         endpoint = random.choice(endpoints)
-        
-        with self.client.get(endpoint, name=f"CIRCUIT_TEST {endpoint}", catch_response=True) as resp:
+
+        with self.client.get(
+            endpoint, name=f"CIRCUIT_TEST {endpoint}", catch_response=True
+        ) as resp:
             # We expect these to fail - that's the point
             if resp.status_code >= 400:
                 resp.success()  # Expected failure for circuit breaker testing
@@ -145,7 +147,7 @@ class ExternalTargetTaskSet(TaskSet):
         """Set up external target testing."""
         if not ENABLE_EXTERNAL_TARGETS:
             raise InterruptTaskSet("External targets disabled")
-        
+
         self.target_base = random.choice(EXTERNAL_TARGETS)
         # Override host for this session
         self.client.base_url = self.target_base
@@ -168,7 +170,7 @@ class ExternalTargetTaskSet(TaskSet):
         """Navigate to different pages."""
         pages = ["/page/1", "/page/2", "/login", "/about", "/contact"]
         page = random.choice(pages)
-        
+
         with self.client.get(page, name=f"EXT {page}", catch_response=True) as resp:
             if resp.status_code in [200, 404]:  # 404 is acceptable for test pages
                 resp.success()
@@ -192,6 +194,7 @@ class MixedTestTaskSet(TaskSet):
 
 class HealthUser(HttpUser):
     """User focused on health and metrics endpoints."""
+
     wait_time = between(0.5, 1.5)
     tasks = [HealthCheckTaskSet]
     weight = 3
@@ -203,6 +206,7 @@ class HealthUser(HttpUser):
 
 class StressUser(HttpUser):
     """User for stress testing scenarios."""
+
     wait_time = between(0.1, 0.5)  # More aggressive timing
     tasks = [StressTestTaskSet]
     weight = 2
@@ -214,6 +218,7 @@ class StressUser(HttpUser):
 
 class ExternalUser(HttpUser):
     """User for external target testing."""
+
     wait_time = between(1.0, 3.0)
     tasks = [ExternalTargetTaskSet]
     weight = 1 if ENABLE_EXTERNAL_TARGETS else 0
@@ -221,6 +226,7 @@ class ExternalUser(HttpUser):
 
 class MixedUser(HttpUser):
     """User combining multiple test scenarios."""
+
     wait_time = between(0.5, 2.0)
     tasks = [MixedTestTaskSet]
     weight = 4
@@ -232,6 +238,7 @@ class MixedUser(HttpUser):
 
 class FastHealthUser(FastHttpUser):
     """High-performance user for health checks using FastHttpUser."""
+
     wait_time = between(0.1, 0.3)
     weight = 2
 
@@ -256,7 +263,9 @@ class FastHealthUser(FastHttpUser):
 
 # Event handlers for additional insights
 @events.request.add_listener
-def on_request(request_type: str, name: str, response_time: float, response_length: int, **kwargs: Any) -> None:
+def on_request(
+    request_type: str, name: str, response_time: float, response_length: int, **kwargs: Any
+) -> None:
     """Log slow requests for analysis."""
     if response_time > 5000:  # Log requests slower than 5 seconds
         print(f"SLOW REQUEST: {request_type} {name} took {response_time:.2f}ms")
@@ -274,20 +283,20 @@ def on_test_start(environment: Any, **kwargs: Any) -> None:
 def on_test_stop(environment: Any, **kwargs: Any) -> None:
     """Clean up test session."""
     print("Load test completed")
-    
+
     # Save results summary
-    if hasattr(environment, 'stats') and environment.stats.entries:
+    if hasattr(environment, "stats") and environment.stats.entries:
         results = {
-            'timestamp': time.time(),
-            'test_mode': TEST_MODE,
-            'target_base': TARGET_BASE,
-            'total_requests': sum(stat.num_requests for stat in environment.stats.entries.values()),
-            'total_failures': sum(stat.num_failures for stat in environment.stats.entries.values()),
-            'avg_response_time': environment.stats.total.avg_response_time,
-            'max_response_time': environment.stats.total.max_response_time,
-            'requests_per_second': environment.stats.total.current_rps,
+            "timestamp": time.time(),
+            "test_mode": TEST_MODE,
+            "target_base": TARGET_BASE,
+            "total_requests": sum(stat.num_requests for stat in environment.stats.entries.values()),
+            "total_failures": sum(stat.num_failures for stat in environment.stats.entries.values()),
+            "avg_response_time": environment.stats.total.avg_response_time,
+            "max_response_time": environment.stats.total.max_response_time,
+            "requests_per_second": environment.stats.total.current_rps,
         }
-        
+
         results_file = Path("load_test_results.json")
         with results_file.open("w") as f:
             json.dump(results, f, indent=2)

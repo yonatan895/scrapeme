@@ -8,17 +8,17 @@ services:
       target: production
     image: selenium-automation:latest
     restart: unless-stopped
-    
+
     environment:
       - SITE_USERNAME=${SITE_USERNAME}
       - SITE_PASSWORD=${SITE_PASSWORD}
       - METRICS_PORT=9090
-    
+
     volumes:
       - ./config/sites.yaml:/app/config/sites.yaml:ro
       - artifacts:/app/artifacts
       - results:/app/results
-    
+
     command: >
       --config /app/config/sites.yaml
       --browser chrome
@@ -26,17 +26,17 @@ services:
       --enable-pooling
       --metrics-port 9090
       --json-logs
-    
+
     networks:
       - selenium-net
-    
+
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:9090/metrics')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-  
+
   # Selenium Grid Hub
   selenium-hub:
     image: selenium/hub:4.15.0
@@ -49,7 +49,7 @@ services:
       - SE_SESSION_RETRY_INTERVAL=5
     networks:
       - selenium-net
-  
+
   # Chrome nodes
   chrome-1:
     image: selenium/node-chrome:4.15.0
@@ -64,7 +64,7 @@ services:
       - SE_NODE_MAX_SESSIONS=3
     networks:
       - selenium-net
-  
+
   chrome-2:
     image: selenium/node-chrome:4.15.0
     restart: unless-stopped
@@ -78,7 +78,7 @@ services:
       - SE_NODE_MAX_SESSIONS=3
     networks:
       - selenium-net
-  
+
   # Prometheus
   prometheus:
     image: prom/prometheus:latest
@@ -95,7 +95,7 @@ services:
       - '--storage.tsdb.retention.time=30d'
     networks:
       - selenium-net
-  
+
   # Grafana
   grafana:
     image: grafana/grafana:latest
@@ -110,7 +110,7 @@ services:
       - grafana-data:/var/lib/grafana
     networks:
       - selenium-net
-  
+
   # Alertmanager
   alertmanager:
     image: prom/alertmanager:latest
