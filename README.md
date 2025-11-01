@@ -13,7 +13,7 @@ A robust, production-ready web scraping and automation framework built with Sele
 - Structured logging, Prometheus metrics, health checks, and build info
 - Docker/Kubernetes deploys, Selenium Grid integration, and comprehensive Makefile workflows
 
-## 🚀 Quick Start (now accurate)
+## 🚀 Quick Start (no prompts)
 
 ```bash
 # 1) Install UV (recommended)
@@ -24,25 +24,27 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/yonatan895/scrapeme.git
 cd scrapeme
 
-# 3) One-shot setup
-make quickstart          # creates venv, installs all extras, verifies imports
+# 3) One-shot setup (no venv prompts)
+make quickstart
 
 # 4) Activate venv
-source .venv/bin/activate    # Windows: .venv\\Scripts\\activate
+source .venv/bin/activate    # Windows: .venv\Scripts\activate
 
 # 5) Run example
 python runner.py --config config/sites.yaml --headless --out results.json
 ```
 
-## 📋 Configuration
+If you need to rebuild the venv explicitly:
 
-- Use config/sites.yaml for site definitions (example committed).
-- Credentials via env: {SITE_NAME_UPPER}_USERNAME / {SITE_NAME_UPPER}_PASSWORD.
+```bash
+make venv-clear   # destructive; recreates .venv cleanly
+```
 
 ## 🧰 Makefile commands (synced)
 
 - Environment & deps
-  - make venv               # create virtual environment (UV)
+  - make venv               # create virtual environment if missing (no prompt)
+  - make venv-clear         # force recreate venv (no prompt)
   - make install-all        # install all extras (dev, lint, security, load, docs)
   - make verify-install     # import smoke (selenium, tenacity, yaml)
   - make compile-requirements  # regenerate requirements*.txt from pyproject
@@ -63,9 +65,7 @@ python runner.py --config config/sites.yaml --headless --out results.json
   - make test-chaos         # chaos marker (pytest)
 
 - Load testing (real Locust)
-  - make load-run           # headless Locust
-    - Variables: USERS=30 SPAWN=3 DURATION=1m LOAD_BASE_URL=http://quotes.toscrape.com
-    - Auto-installs "[load]" extras via UV if missing
+  - make load-run           # headless Locust (USERS=30 SPAWN=3 DURATION=1m LOAD_BASE_URL=...)
 
 - Docker & Compose
   - make docker-prepare     # create results/artifacts/config (uses committed config/sites.yaml)
@@ -85,25 +85,13 @@ python runner.py --config config/sites.yaml --headless --out results.json
 - Diagnostics
   - make info | make health-check | make diagnose
 
-## 🧪 Tests
+## 🔒 Security
 
-- Unit tests at tests/unit; includes config models, rate limiter, URL utils, and a schema sanity test loading all YAML via the project loader.
-- Load tests use Locust at tests/load/locustfile.py (actual HTTP traffic).
-
-Examples:
-
-```bash
-make test
-make load-run USERS=50 SPAWN=5 DURATION=2m
-```
+- The "load" extra locks brotli==1.1.0 across the project for consistent, resolvable installs.
 
 ## 📊 Monitoring
 
 - App exports Prometheus on 9090; docker-compose.production.yaml exposes Prometheus server on 9091, Grafana on 3000, Alertmanager on 9093.
-
-## 🔒 Security
-
-- The "load" extra pins brotli>=1.2.0 to ensure patched versions during load testing installs.
 
 ## 🐳 Docker & ☸️ Kubernetes
 
@@ -117,7 +105,8 @@ Use the compose-* and k8s-* Make targets shown above. See docker-compose.product
 
 ## 🔍 Troubleshooting
 
-- If Locust is missing: make load-run installs [load] extras automatically
-- If results/artifacts perms fail in Docker: chown to your UID/GID
-- Increase wait/page timeouts in sites.yaml for slow endpoints
-- Use --remote-url to target Selenium Grid
+- No more venv prompts: venv is created only if missing; use make venv-clear to rebuild explicitly.
+- If Locust is missing: make load-run installs [load] extras automatically via UV.
+- If results/artifacts perms fail in Docker: chown to your UID/GID.
+- Increase wait/page timeouts in sites.yaml for slow endpoints.
+- Use --remote-url to target Selenium Grid.
