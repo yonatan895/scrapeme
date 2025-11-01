@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: scrapeme-staging
+  labels:
+    environment: staging
+    cost-center: engineering
+    data-classification: internal
+  annotations:
+    description: "ScrapeMe staging environment"
+    owner: "platform-team@company.com"

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: scrapeme-dev
+  labels:
+    environment: development
+    cost-center: engineering
+  annotations:
+    description: "ScrapeMe development environment"

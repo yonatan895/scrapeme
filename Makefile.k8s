@@ -1,0 +1,197 @@
+# Kubernetes-specific Makefile targets
+# Include this file in main Makefile with: include Makefile.k8s
+
+.PHONY: k8s-help k8s-validate k8s-deploy k8s-delete k8s-status k8s-logs k8s-describe \
+        k8s-port-forward k8s-restart k8s-shell k8s-debug k8s-rollback k8s-scale \
+        k8s-dev k8s-staging k8s-prod k8s-secrets k8s-monitoring k8s-backup
+
+# Configuration
+K8S_NAMESPACE ?= scrapeme
+K8S_ENVIRONMENT ?= dev
+K8S_CONTEXT ?= $(shell kubectl config current-context)
+K8S_OVERLAY_PATH := k8s/overlays/$(K8S_ENVIRONMENT)
+KUBECTL := kubectl
+KUSTOMIZE := kubectl kustomize
+
+# Colors for output
+K8S_GREEN := \033[32m
+K8S_YELLOW := \033[33m
+K8S_RED := \033[31m
+K8S_BLUE := \033[34m
+K8S_NC := \033[0m
+
+k8s-help: ## Show Kubernetes-specific help
+	@echo "$(K8S_BLUE)=== Kubernetes Operations ===$(K8S_NC)"
+	@echo "Environment: $(K8S_ENVIRONMENT) | Namespace: $(K8S_NAMESPACE) | Context: $(K8S_CONTEXT)"
+	@echo ""
+	@awk 'BEGIN {FS = ":.*?## "} /^k8s-[a-zA-Z_-]+:.*?## / {printf "  $(K8S_GREEN)%-20s$(K8S_NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+k8s-validate: ## Validate Kubernetes manifests
+	@echo "$(K8S_BLUE)Validating Kubernetes manifests...$(K8S_NC)"
+	@if [ ! -d "$(K8S_OVERLAY_PATH)" ]; then \
+		echo "$(K8S_RED)Error: Overlay path $(K8S_OVERLAY_PATH) not found$(K8S_NC)"; \
+		exit 1; \
+	fi
+	$(KUSTOMIZE) $(K8S_OVERLAY_PATH) | $(KUBECTL) --dry-run=client -f -
+	@echo "$(K8S_GREEN)✓ Manifests are valid$(K8S_NC)"
+
+k8s-deploy: k8s-validate ## Deploy to Kubernetes
+	@echo "$(K8S_BLUE)Deploying ScrapeMe to $(K8S_ENVIRONMENT) environment...$(K8S_NC)"
+	$(KUSTOMIZE) $(K8S_OVERLAY_PATH) | $(KUBECTL) apply -f -
+	@echo "$(K8S_GREEN)✓ Deployment completed$(K8S_NC)"
+	@echo "$(K8S_YELLOW)Waiting for rollout to complete...$(K8S_NC)"
+	$(KUBECTL) rollout status deployment/scrapeme-app -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) --timeout=300s
+	$(KUBECTL) rollout status deployment/selenium-hub -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) --timeout=300s
+	@echo "$(K8S_GREEN)✓ All deployments are ready$(K8S_NC)"
+
+k8s-delete: ## Delete from Kubernetes
+	@echo "$(K8S_YELLOW)Deleting ScrapeMe from $(K8S_ENVIRONMENT) environment...$(K8S_NC)"
+	@read -p "Are you sure you want to delete all resources? [y/N] " -n 1 -r; \
+	echo; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		$(KUSTOMIZE) $(K8S_OVERLAY_PATH) | $(KUBECTL) delete -f - --ignore-not-found=true; \
+		echo "$(K8S_GREEN)✓ Resources deleted$(K8S_NC)"; \
+	else \
+		echo "$(K8S_YELLOW)Deletion cancelled$(K8S_NC)"; \
+	fi
+
+k8s-status: ## Show deployment status
+	@echo "$(K8S_BLUE)=== Deployment Status ===$(K8S_NC)"
+	@echo "Environment: $(K8S_ENVIRONMENT)"
+	@echo "Namespace: $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT)"
+	@echo ""
+	$(KUBECTL) get pods,svc,deploy,hpa,pvc -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) -o wide
+	@echo ""
+	@echo "$(K8S_BLUE)=== Resource Usage ===$(K8S_NC)"
+	$(KUBECTL) top pods -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) 2>/dev/null || echo "Metrics server not available"
+
+k8s-logs: ## Show application logs
+	@echo "$(K8S_BLUE)ScrapeMe Application Logs:$(K8S_NC)"
+	$(KUBECTL) logs -f deployment/scrapeme-app -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) --tail=100
+
+k8s-describe: ## Describe Kubernetes resources
+	@echo "$(K8S_BLUE)=== Resource Details ===$(K8S_NC)"
+	$(KUBECTL) describe deployment scrapeme-app -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT)
+	@echo ""
+	$(KUBECTL) describe service scrapeme-app -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT)
+	@echo ""
+	$(KUBECTL) describe hpa scrapeme-app-hpa -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT)
+
+k8s-port-forward: ## Port forward to services
+	@echo "$(K8S_BLUE)Port forwarding services...$(K8S_NC)"
+	@echo "ScrapeMe metrics: http://localhost:9090"
+	@echo "Prometheus: http://localhost:9091"
+	@echo "Grafana: http://localhost:3000"
+	@echo "Selenium Hub: http://localhost:4444"
+	@echo "$(K8S_YELLOW)Press Ctrl+C to stop$(K8S_NC)"
+	$(KUBECTL) port-forward svc/scrapeme-app 9090:9090 -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) & \
+	$(KUBECTL) port-forward svc/prometheus 9091:9090 -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) & \
+	$(KUBECTL) port-forward svc/grafana 3000:3000 -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) & \
+	$(KUBECTL) port-forward svc/selenium-hub 4444:4444 -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) & \
+	wait
+
+k8s-restart: ## Restart deployments
+	@echo "$(K8S_BLUE)Restarting deployments...$(K8S_NC)"
+	$(KUBECTL) rollout restart deployment/scrapeme-app -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT)
+	$(KUBECTL) rollout restart deployment/selenium-hub -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT)
+	$(KUBECTL) rollout restart deployment/selenium-chrome -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT)
+	@echo "$(K8S_GREEN)✓ Deployments restarted$(K8S_NC)"
+
+k8s-shell: ## Get shell access to application pod
+	@echo "$(K8S_BLUE)Opening shell to ScrapeMe pod...$(K8S_NC)"
+	$(KUBECTL) exec -it deployment/scrapeme-app -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) -- /bin/bash
+
+k8s-debug: ## Debug application issues
+	@echo "$(K8S_BLUE)=== Debug Information ===$(K8S_NC)"
+	@echo "$(K8S_YELLOW)Pod Status:$(K8S_NC)"
+	$(KUBECTL) get pods -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) -o wide
+	@echo ""
+	@echo "$(K8S_YELLOW)Recent Events:$(K8S_NC)"
+	$(KUBECTL) get events -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) --sort-by='.firstTimestamp' | tail -20
+	@echo ""
+	@echo "$(K8S_YELLOW)Failed Pods:$(K8S_NC)"
+	$(KUBECTL) get pods -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) --field-selector=status.phase!=Running
+
+k8s-rollback: ## Rollback to previous version
+	@echo "$(K8S_YELLOW)Rolling back ScrapeMe deployment...$(K8S_NC)"
+	$(KUBECTL) rollout undo deployment/scrapeme-app -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT)
+	$(KUBECTL) rollout status deployment/scrapeme-app -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT)
+	@echo "$(K8S_GREEN)✓ Rollback completed$(K8S_NC)"
+
+k8s-scale: ## Scale deployments (use REPLICAS=N)
+	@REPLICAS=${REPLICAS:-3}; \
+	echo "$(K8S_BLUE)Scaling ScrapeMe to $$REPLICAS replicas...$(K8S_NC)"; \
+	$(KUBECTL) scale deployment/scrapeme-app --replicas=$$REPLICAS -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT); \
+	echo "$(K8S_GREEN)✓ Scaled to $$REPLICAS replicas$(K8S_NC)"
+
+# Environment-specific shortcuts
+k8s-dev: ## Deploy to development
+	$(MAKE) k8s-deploy K8S_ENVIRONMENT=dev
+
+k8s-staging: ## Deploy to staging
+	$(MAKE) k8s-deploy K8S_ENVIRONMENT=staging
+
+k8s-prod: ## Deploy to production
+	$(MAKE) k8s-deploy K8S_ENVIRONMENT=production
+
+k8s-secrets: ## Create secrets from environment variables
+	@echo "$(K8S_BLUE)Creating secrets...$(K8S_NC)"
+	@if [ -z "$$SITE_USERNAME" ] || [ -z "$$SITE_PASSWORD" ]; then \
+		echo "$(K8S_RED)Error: SITE_USERNAME and SITE_PASSWORD must be set$(K8S_NC)"; \
+		exit 1; \
+	fi
+	$(KUBECTL) create secret generic scrapeme-secrets \
+		--from-literal=SITE_USERNAME="$$SITE_USERNAME" \
+		--from-literal=SITE_PASSWORD="$$SITE_PASSWORD" \
+		--from-literal=GRAFANA_ADMIN_PASSWORD="$${GRAFANA_PASSWORD:-admin123}" \
+		-n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) \
+		--dry-run=client -o yaml | $(KUBECTL) apply -f -
+	@echo "$(K8S_GREEN)✓ Secrets created$(K8S_NC)"
+
+k8s-monitoring: ## Check monitoring stack
+	@echo "$(K8S_BLUE)=== Monitoring Stack Status ===$(K8S_NC)"
+	$(KUBECTL) get pods -l app.kubernetes.io/component=monitoring -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT)
+	@echo ""
+	@echo "$(K8S_BLUE)Prometheus Targets:$(K8S_NC)"
+	@echo "Access: kubectl port-forward svc/prometheus 9090:9090 -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT)"
+	@echo "$(K8S_BLUE)Grafana Dashboard:$(K8S_NC)"
+	@echo "Access: kubectl port-forward svc/grafana 3000:3000 -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT)"
+
+k8s-backup: ## Backup persistent data
+	@echo "$(K8S_BLUE)Creating backup of persistent volumes...$(K8S_NC)"
+	@TIMESTAMP=$$(date +%Y%m%d-%H%M%S); \
+	echo "Backup timestamp: $$TIMESTAMP"; \
+	$(KUBECTL) get pvc -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) -o yaml > backup-pvc-$$TIMESTAMP.yaml; \
+	echo "$(K8S_GREEN)✓ PVC backup saved to backup-pvc-$$TIMESTAMP.yaml$(K8S_NC)"
+
+# Validation targets
+k8s-lint: ## Lint Kubernetes manifests
+	@echo "$(K8S_BLUE)Linting Kubernetes manifests...$(K8S_NC)"
+	@if command -v kubeval >/dev/null 2>&1; then \
+		$(KUSTOMIZE) $(K8S_OVERLAY_PATH) | kubeval; \
+	else \
+		echo "$(K8S_YELLOW)kubeval not found, skipping validation$(K8S_NC)"; \
+	fi
+
+k8s-security-scan: ## Run security scans
+	@echo "$(K8S_BLUE)Running security scans...$(K8S_NC)"
+	@if command -v kubesec >/dev/null 2>&1; then \
+		$(KUSTOMIZE) $(K8S_OVERLAY_PATH) | kubesec scan -; \
+	else \
+		echo "$(K8S_YELLOW)kubesec not found, skipping security scan$(K8S_NC)"; \
+	fi
+
+# Health check targets
+k8s-health: ## Check application health
+	@echo "$(K8S_BLUE)Checking application health...$(K8S_NC)"
+	@$(KUBECTL) exec deployment/scrapeme-app -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) -- curl -f http://localhost:9090/healthz || \
+		echo "$(K8S_RED)Health check failed$(K8S_NC)"
+
+k8s-load-test: ## Run load test against Kubernetes deployment
+	@echo "$(K8S_BLUE)Running load test...$(K8S_NC)"
+	@echo "Port-forwarding to access application..."
+	$(KUBECTL) port-forward svc/scrapeme-app 9090:9090 -n $(K8S_NAMESPACE)-$(K8S_ENVIRONMENT) > /dev/null 2>&1 & \
+	PF_PID=$$!; \
+	sleep 3; \
+	make load-test-health LOAD_BASE_URL=http://localhost:9090; \
+	kill $$PF_PID 2>/dev/null || true

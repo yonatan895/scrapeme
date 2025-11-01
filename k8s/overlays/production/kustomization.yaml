@@ -1,0 +1,60 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: scrapeme
+
+resources:
+  - ../../base
+  - resource-quota.yaml
+  - network-policies.yaml
+  - pod-security-policy.yaml
+  - monitoring-rules.yaml
+
+patchesStrategicMerge:
+  - namespace-patch.yaml
+  - security-patch.yaml
+  - production-config-patch.yaml
+
+replicas:
+  - name: scrapeme-app
+    count: 3
+  - name: selenium-chrome
+    count: 3
+  - name: prometheus
+    count: 1
+
+images:
+  - name: scrapeme
+    newTag: v2.0.0
+
+commonLabels:
+  environment: production
+  version: v2.0.0
+  
+commonAnnotations:
+  deployment.kubernetes.io/revision: "1"
+  security.kubernetes.io/policy: "restricted"
+  monitoring.kubernetes.io/scrape: "true"
+  backup.kubernetes.io/enabled: "true"
+
+configMapGenerator:
+  - name: production-config
+    literals:
+      - LOG_LEVEL=WARN
+      - ENABLE_METRICS=true
+      - RETENTION_DAYS=30
+      - BACKUP_ENABLED=true
+      - SECURITY_SCAN_ENABLED=true
+
+patchesJson6902:
+  - target:
+      version: v2
+      kind: HorizontalPodAutoscaler
+      name: scrapeme-app-hpa
+    patch: |
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 20
