@@ -1,42 +1,50 @@
-"""Serialization helpers for stable JSON encoding/decoding."""
+"""Serialization helpers for stable JSON encoding/decoding with strict types."""
 
 from __future__ import annotations
 
 from typing import Any
 
 try:
-    import orjson as _json
-    _HAS_ORJSON = True
+    import orjson as _orjson
+    HAS_ORJSON = True
 except Exception:  # pragma: no cover - fallback path
-    import json as _json  # type: ignore[no-redef]
-    _HAS_ORJSON = False
+    _orjson = None  # type: ignore[assignment]
+    HAS_ORJSON = False
+import json as _stdlib_json
 
 
-def dumps(data: Any) -> bytes | str:
-    """Serialize data to JSON.
+def dumps_bytes(data: Any) -> bytes:
+    """Serialize to JSON bytes.
 
-    Returns bytes when using orjson, str when falling back to stdlib json.
+    Uses orjson when available (returns bytes). Falls back to stdlib json
+    and encodes to UTF-8 bytes.
     """
-    if _HAS_ORJSON and hasattr(_json, "dumps"):
-        # Use default options if OPT_INDENT_2 not present in orjson build
-        opts = getattr(_json, "OPT_INDENT_2", 0)
-        return _json.dumps(data, option=opts)  # type: ignore[call-arg]
-    # Stdlib json fallback
-    return _json.dumps(data).encode("utf-8")
+    if HAS_ORJSON and _orjson is not None:
+        return _orjson.dumps(data)  # type: ignore[no-any-return]
+    return _stdlib_json.dumps(data).encode("utf-8")
+
+
+def dumps_str(data: Any) -> str:
+    """Serialize to a JSON string (text)."""
+    if HAS_ORJSON and _orjson is not None:
+        return _orjson.dumps(data).decode("utf-8")
+    return _stdlib_json.dumps(data)
 
 
 def pretty_dumps(data: Any) -> str:
-    """Pretty-print JSON for logs and artifacts."""
-    if _HAS_ORJSON:
-        return _json.dumps(data, option=getattr(_json, "OPT_INDENT_2", 0)).decode("utf-8")  # type: ignore[call-arg]
-    return _json.dumps(data, indent=2)
+    """Pretty JSON string for logs and artifacts."""
+    if HAS_ORJSON and _orjson is not None:
+        indent_opt = getattr(_orjson, "OPT_INDENT_2", 0)
+        return _orjson.dumps(data, option=indent_opt).decode("utf-8")
+    return _stdlib_json.dumps(data, indent=2)
 
 
 def loads(data: bytes | str) -> Any:
-    """Deserialize data from JSON."""
+    """Deserialize JSON from bytes or string."""
     if isinstance(data, (bytes, bytearray)):
-        try:
-            return _json.loads(data)
-        except Exception:  # pragma: no cover
-            return _json.loads(data.decode("utf-8"))
-    return _json.loads(data)
+        if HAS_ORJSON and _orjson is not None:
+            return _orjson.loads(data)
+        return _stdlib_json.loads(data.decode("utf-8"))
+    if HAS_ORJSON and _orjson is not None:
+        return _orjson.loads(data)  # type: ignore[arg-type]
+    return _stdlib_json.loads(data)
