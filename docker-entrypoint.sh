@@ -29,4 +29,3 @@ echo "======================================"
 
 # Execute the main command
 exec python runner.py "$@"
-

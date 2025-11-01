@@ -4,13 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from config.models import (
-    FieldConfig,
-    FrameSpec,
-    LoginConfig,
-    SiteConfig,
-    StepBlock,
-)
+from config.models import FieldConfig, FrameSpec, LoginConfig, SiteConfig, StepBlock
 
 
 class TestFieldConfig:

@@ -7,13 +7,7 @@ from typing import Any
 
 import yaml
 
-from config.models import (
-    FieldConfig,
-    FrameSpec,
-    LoginConfig,
-    SiteConfig,
-    StepBlock,
-)
+from config.models import FieldConfig, FrameSpec, LoginConfig, SiteConfig, StepBlock
 from config.validators import validate_url, validate_xpath
 from core.exceptions import ConfigError
 
