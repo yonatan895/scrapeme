@@ -7,7 +7,7 @@
 Web scraping and automation framework built with Selenium.
 
 ## Important notes
-- This implementation is far from complete, and many parts are still missing. Although the Python code is quite robust, I don't take any responsibility for any unintended behavior that might arise as a result of running this code. Use at your own discretion.
+- This implementation is far from complete, and many parts are still missing. I don't take any responsibility for any unintended behavior that might arise as a result of running this code, as well as legal issues from scraping sites without permission and authorization. Use at your own discretion.
   
 - The `docs/` should provide a basic understanding of the project. However, things can be out-dated as I don't update it much. For accurate information, always consult the actual source code.
 - Suggestions and contributions related to core functionality are welcome, and I might take a look at them from time to time. However, refrain from styling-related suggestions, as I don't intend to be working on those any time soon.
@@ -15,6 +15,8 @@ Web scraping and automation framework built with Selenium.
 - If there is a security concern, please let me know. But please don't submit AI slope reports. You won't claim a bounty for finding a vulnerability here.
   
 - This has been mainly tested on Linux (`Ubuntu`), so it is recommended to run the project in a Linux/WSL based environment. It is discourged to use native Windows/MacOs, as there are minimal guarantees for it to be working.
+
+- 
 
 ## Quick start
 ```bash
