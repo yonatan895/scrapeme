@@ -381,7 +381,7 @@ security-check: venv ## Security scans (bandit + safety)
 	@if [ ! -x "$(BANDIT)" ]; then $(UV) pip install -e ".[security]"; fi
 	$(BANDIT) -r core/ config/ infra/ runner.py -ll -f json -o bandit-report.json || true
 	@if [ ! -x "$(SAFETY)" ]; then $(UV) pip install -e ".[security]"; fi
-	$(SAFETY) check --json --output safety-report.json --continue-on-error || true
+	$(SAFETY) check --output json --continue-on-error > safety-report.json || true
 
 # --- Docker & Compose (extended) ---
 
