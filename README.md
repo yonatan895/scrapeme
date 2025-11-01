@@ -7,7 +7,7 @@
 Web scraping and automation framework built with Selenium.
 
 ## Important notes
-- This implementation is far from complete, and many parts are still missing. I don't take any responsibility for any unintended behavior that might arise as a result of running this code, as well as legal issues from scraping sites without permission and authorization. Use at your own discretion.
+- This implementation is far from complete, many parts are still missing, and some things may be redundant. I don't take any responsibility for any unintended behavior that might arise as a result of running this code, as well as legal issues from scraping sites without explicit permission and authorization. Use at your own discretion.
   
 - The `docs/` should provide a basic understanding of the project. However, things can be out-dated as I don't update it much. For accurate information, always consult the actual source code.
 - Suggestions and contributions related to core functionality are welcome, and I might take a look at them from time to time. However, refrain from styling-related suggestions, as I don't intend to be working on those any time soon.
