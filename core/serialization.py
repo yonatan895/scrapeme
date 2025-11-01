@@ -34,10 +34,7 @@ def to_jsonable(obj: Any) -> Any:
     - Memoizes by id() to avoid revisiting shared nodes.
     """
     seen: set[int] = set()
-    stack: list[tuple[Any, Any | None]] = [(obj, None)]  # (current, parent_slot)
-    # parent_slot is a (container, key/index) tuple stored inside container; here we rebuild top-down
 
-    # We build a parallel structure using an inner function to allocate containers once
     def _adapt_scalar(x: Any) -> Any:
         if isinstance(x, _JSON_PRIMITIVES):
             return x
@@ -49,11 +46,9 @@ def to_jsonable(obj: Any) -> Any:
             return x.value
         return str(x)
 
-    # Fast path: primitives
     if isinstance(obj, _JSON_PRIMITIVES):
         return obj
 
-    # Initialize root container
     if isinstance(obj, Mapping):
         root: Any = {}
     elif isinstance(obj, (list, tuple)):
@@ -61,7 +56,6 @@ def to_jsonable(obj: Any) -> Any:
     else:
         return _adapt_scalar(obj)
 
-    # Work stack holds tuples of (source, target)
     work: list[tuple[Any, Any]] = [(obj, root)]
     seen.add(id(obj))
 
@@ -109,9 +103,9 @@ def to_jsonable(obj: Any) -> Any:
                         tgt.append(None)
                         continue
                     seen.add(id(v))
-                    new_list: list[Any] = []
-                    tgt.append(new_list)
-                    work.append((v, new_list))
+                    child_list: list[Any] = []
+                    tgt.append(child_list)
+                    work.append((v, child_list))
                 else:
                     tgt.append(_adapt_scalar(v))
 
