@@ -1,20 +1,7 @@
-"""Type aliases and NewTypes for domain modeling."""
+"""Type aliases used across the project."""
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import NewType, TypeAlias
-
-# Strong type aliases for domain concepts
-SiteName: TypeAlias = str
-StepName: TypeAlias = str
-FieldName: TypeAlias = str
-XPathSelector: TypeAlias = str
-CSSSelector: TypeAlias = str
-URL: TypeAlias = str
-
-# NewTypes for additional type safety
-ArtifactPath = NewType("ArtifactPath", Path)
-SecretKey = NewType("SecretKey", str)
-MetricName = NewType("MetricName", str)
-TraceID = NewType("TraceID", str)
+UrlStr = str  # Alias for clarity in signatures
+XPathStr = str
+CssSelector = str
