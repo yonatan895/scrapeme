@@ -25,7 +25,7 @@ python runner.py --config config/sites.yaml --headless --out results.json
 - docker: make docker-build / docker-run / docker-shell
 - compose: make compose-up / compose-down / compose-logs / compose-restart
 
-```
+
 Adjust environment via .env (see .env.example) and tune resource limits as needed.
 
 ## Observability
