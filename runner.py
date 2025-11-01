@@ -9,8 +9,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from prometheus_client import start_http_server
-
 from config.loader import load_sites
 from config.models import SiteConfig
 from core.auth import AuthFlow
@@ -25,6 +23,7 @@ from core.serialization import to_jsonable
 from core.waits import Waiter
 from infra.health import HealthRegistry, HealthStatus
 from infra.logging_config import configure_logging
+from infra.server import HealthServer
 from infra.signals import register_shutdown_handler, setup_signal_handlers, shutdown_event
 
 if TYPE_CHECKING:
@@ -169,19 +168,36 @@ def main() -> int:
         "--jsonl", action="store_true", help="Write JSONL output (one line per site)"
     )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output (slower)")
+    parser.add_argument(
+        "--daemon",
+        action="store_true",
+        help="Run as daemon with health checks (for Kubernetes deployment)",
+    )
 
     args = parser.parse_args()
 
     setup_signal_handlers()
     logger = configure_logging(args.log_level, args.log_file, args.json_logs)
 
-    start_http_server(args.metrics_port)
-    logger.info(f"Metrics server started on port {args.metrics_port}")
+    # Start health server for Kubernetes health checks and metrics
+    health_server = HealthServer(port=args.metrics_port)
+    health_server.start()
 
+    # Register basic readiness check
     HealthRegistry.register(
         "ready",
-        lambda: (HealthStatus.HEALTHY, "OK"),
+        lambda: (HealthStatus.HEALTHY, "Application ready"),
     )
+
+    # Register configuration health check
+    def config_health_check() -> tuple[HealthStatus, str]:
+        try:
+            sites = load_sites(args.config)
+            return (HealthStatus.HEALTHY, f"Loaded {len(sites)} sites")
+        except Exception as e:
+            return (HealthStatus.UNHEALTHY, f"Failed to load config: {e}")
+
+    HealthRegistry.register("config", config_health_check)
 
     artifact_dir = None if args.no_artifacts else args.artifact_dir
     if artifact_dir:
@@ -193,6 +209,7 @@ def main() -> int:
         logger.info(f"Loaded {len(sites)} sites")
     except Exception as e:
         logger.exception("Failed to load configuration")
+        health_server.stop()
         return 1
 
     Metrics.build_info.info(
@@ -202,97 +219,114 @@ def main() -> int:
         }
     )
 
+    # Daemon mode for Kubernetes deployment
+    if args.daemon:
+        logger.info("Running in daemon mode - waiting for shutdown signal")
+        try:
+            # Keep the process alive for health checks
+            shutdown_event.wait()
+            logger.info("Shutdown signal received")
+        except KeyboardInterrupt:
+            logger.info("Interrupted by user")
+        finally:
+            health_server.stop()
+        return 0
+
     results: list[dict[str, Any]] = []
     max_workers = min(args.max_workers, max(1, len(sites)))
 
-    if args.jsonl:
-        # Stream JSON lines as results become available
+    try:
+        if args.jsonl:
+            # Stream JSON lines as results become available
+            try:
+                with args.out.open("wb") as fp:
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        futures = {
+                            executor.submit(
+                                process_site,
+                                site,
+                                browser=args.browser,
+                                headless=args.headless,
+                                incognito=args.incognito,
+                                download_dir=args.download_dir,
+                                remote_url=args.remote_url,
+                                chromedriver_path=args.chromedriver_path,
+                                artifact_dir=artifact_dir,
+                                enable_pooling=args.enable_pooling,
+                            ): site.name
+                            for site in sites
+                        }
+
+                        for future in as_completed(futures):
+                            if shutdown_event.is_set():
+                                logger.warning("Shutdown requested")
+                                executor.shutdown(wait=False, cancel_futures=True)
+                                break
+
+                            site_name = futures[future]
+                            try:
+                                result = future.result()
+                                logger.info(f"✓ Completed: {site_name}")
+                            except AutomationError as e:
+                                logger.error(f"✗ Automation error on {site_name}: {e}")
+                                result = format_error_result(site_name, e)
+                            except Exception as e:
+                                logger.exception(f"✗ Unhandled error on {site_name}")
+                                result = format_error_result(site_name, e)
+
+                            fp.write(fast_dumps(to_jsonable(result)))
+                            fp.write(b"\n")
+            except Exception:
+                logger.exception("Failed to write results")
+                return 1
+            return 0
+
+        # Default: collect in-memory and dump once (compact by default)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(
+                    process_site,
+                    site,
+                    browser=args.browser,
+                    headless=args.headless,
+                    incognito=args.incognito,
+                    download_dir=args.download_dir,
+                    remote_url=args.remote_url,
+                    chromedriver_path=args.chromedriver_path,
+                    artifact_dir=artifact_dir,
+                    enable_pooling=args.enable_pooling,
+                ): site.name
+                for site in sites
+            }
+
+            for future in as_completed(futures):
+                if shutdown_event.is_set():
+                    logger.warning("Shutdown requested")
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    break
+
+                site_name = futures[future]
+                try:
+                    result = future.result()
+                    results.append(result)
+                    logger.info(f"✓ Completed: {site_name}")
+                except AutomationError as e:
+                    logger.error(f"✗ Automation error on {site_name}: {e}")
+                    results.append(format_error_result(site_name, e))
+                except Exception as e:
+                    logger.exception(f"✗ Unhandled error on {site_name}")
+                    results.append(format_error_result(site_name, e))
+
         try:
-            with args.out.open("wb") as fp:
-                with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    futures = {
-                        executor.submit(
-                            process_site,
-                            site,
-                            browser=args.browser,
-                            headless=args.headless,
-                            incognito=args.incognito,
-                            download_dir=args.download_dir,
-                            remote_url=args.remote_url,
-                            chromedriver_path=args.chromedriver_path,
-                            artifact_dir=artifact_dir,
-                            enable_pooling=args.enable_pooling,
-                        ): site.name
-                        for site in sites
-                    }
-
-                    for future in as_completed(futures):
-                        if shutdown_event.is_set():
-                            logger.warning("Shutdown requested")
-                            executor.shutdown(wait=False, cancel_futures=True)
-                            break
-
-                        site_name = futures[future]
-                        try:
-                            result = future.result()
-                            logger.info(f"✓ Completed: {site_name}")
-                        except AutomationError as e:
-                            logger.error(f"✗ Automation error on {site_name}: {e}")
-                            result = format_error_result(site_name, e)
-                        except Exception as e:
-                            logger.exception(f"✗ Unhandled error on {site_name}")
-                            result = format_error_result(site_name, e)
-
-                        fp.write(fast_dumps(to_jsonable(result)))
-                        fp.write(b"\n")
+            output_bytes = fast_dumps(to_jsonable(results), pretty=args.pretty)
+            args.out.write_bytes(output_bytes)
+            logger.info(f"Results written to {args.out}")
         except Exception:
             logger.exception("Failed to write results")
             return 1
-        return 0
 
-    # Default: collect in-memory and dump once (compact by default)
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(
-                process_site,
-                site,
-                browser=args.browser,
-                headless=args.headless,
-                incognito=args.incognito,
-                download_dir=args.download_dir,
-                remote_url=args.remote_url,
-                chromedriver_path=args.chromedriver_path,
-                artifact_dir=artifact_dir,
-                enable_pooling=args.enable_pooling,
-            ): site.name
-            for site in sites
-        }
-
-        for future in as_completed(futures):
-            if shutdown_event.is_set():
-                logger.warning("Shutdown requested")
-                executor.shutdown(wait=False, cancel_futures=True)
-                break
-
-            site_name = futures[future]
-            try:
-                result = future.result()
-                results.append(result)
-                logger.info(f"✓ Completed: {site_name}")
-            except AutomationError as e:
-                logger.error(f"✗ Automation error on {site_name}: {e}")
-                results.append(format_error_result(site_name, e))
-            except Exception as e:
-                logger.exception(f"✗ Unhandled error on {site_name}")
-                results.append(format_error_result(site_name, e))
-
-    try:
-        output_bytes = fast_dumps(to_jsonable(results), pretty=args.pretty)
-        args.out.write_bytes(output_bytes)
-        logger.info(f"Results written to {args.out}")
-    except Exception:
-        logger.exception("Failed to write results")
-        return 1
+    finally:
+        health_server.stop()
 
     return 0
 
