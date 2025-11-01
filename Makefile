@@ -7,7 +7,8 @@
         ci-local pre-commit-install pre-commit-run pre-commit-update quickstart dev check fix watch version version-bump git-tag \
         info deps-tree deps-outdated health-check diagnose load-run verify-python \
         load-test-health load-test-stress load-test-mixed load-test-fast load-test-external load-test-ci load-test-production \
-        load-test-install load-test-clean load-test-results
+        load-test-install load-test-clean load-test-results \
+        load-test-real-app load-test-real-scraping load-test-real-monitoring load-test-real-browser load-test-app-start load-test-app-stop
 
 .DEFAULT_GOAL := help
 
@@ -46,6 +47,14 @@ REGISTRY := ghcr.io/yonatan895
 LOAD_BASE_URL ?= http://localhost:9090
 LOAD_RESULTS_DIR ?= artifacts/load_tests
 LOCUST_FILE := tests/load/locustfile.py
+REAL_LOCUST_FILE := tests/load/real_app_locustfile.py
+
+# Real application testing configuration
+APP_BASE_URL ?= http://localhost:8000
+METRICS_URL ?= http://localhost:9090
+APP_CONFIG ?= config/test_sites.yaml
+APP_PID_FILE := .app_server.pid
+APP_PORT ?= 8000
 
 # Colors (portable via tput; disabled when not a TTY)
 ifneq ($(OS),Windows_NT)
@@ -229,6 +238,94 @@ load-test-production: load-test-install ## Run production-like load tests
 		--csv $(LOAD_RESULTS_DIR)/production_test
 	@echo "$(GREEN)Production load tests completed$(NC)"
 
+# --- Real Application Load Testing ---
+
+load-test-app-start: venv ## Start ScrapeMe application for load testing
+	@if [ -f "$(APP_PID_FILE)" ]; then \
+		echo "$(YELLOW)Application already running (PID: $$(cat $(APP_PID_FILE)))$(NC)"; \
+	else \
+		echo "$(BLUE)Starting ScrapeMe application in daemon mode...$(NC)"; \
+		if [ ! -f "$(APP_CONFIG)" ]; then \
+			echo "$(YELLOW)Config file not found: $(APP_CONFIG)$(NC)"; \
+			echo "$(YELLOW)Creating minimal test config...$(NC)"; \
+			mkdir -p $$(dirname $(APP_CONFIG)); \
+			echo "sites: []" > $(APP_CONFIG); \
+		fi; \
+		$(VENV_BIN)/python runner.py --config $(APP_CONFIG) --daemon --metrics-port 9090 > app.log 2>&1 & \
+		echo $$! > $(APP_PID_FILE); \
+		sleep 3; \
+		if kill -0 $$! 2>/dev/null; then \
+			echo "$(GREEN)Application started (PID: $$!)$(NC)"; \
+			echo "$(BLUE)Health endpoint: http://localhost:9090/healthz$(NC)"; \
+			echo "$(BLUE)Metrics endpoint: http://localhost:9090/metrics$(NC)"; \
+		else \
+			echo "$(RED)Failed to start application$(NC)"; \
+			cat app.log || true; \
+			rm -f $(APP_PID_FILE); \
+			exit 1; \
+		fi; \
+	fi
+
+load-test-app-stop: ## Stop ScrapeMe application
+	@if [ -f "$(APP_PID_FILE)" ]; then \
+		PID=$$(cat $(APP_PID_FILE)); \
+		echo "$(BLUE)Stopping ScrapeMe application (PID: $$PID)...$(NC)"; \
+		if kill $$PID 2>/dev/null; then \
+			echo "$(GREEN)Application stopped$(NC)"; \
+		else \
+			echo "$(YELLOW)Application was not running$(NC)"; \
+		fi; \
+		rm -f $(APP_PID_FILE); \
+	else \
+		echo "$(YELLOW)No application PID file found$(NC)"; \
+	fi
+
+load-test-real-app: load-test-install load-test-app-start ## Run comprehensive real application load tests
+	@echo "$(BLUE)Running REAL APPLICATION comprehensive load tests...$(NC)"
+	@echo "$(YELLOW)WARNING: Testing against actual ScrapeMe application!$(NC)"
+	@sleep 3  # Give application time to fully start
+	APP_BASE_URL=$(APP_BASE_URL) METRICS_URL=$(METRICS_URL) REAL_LOAD_TEST_MODE=mixed \
+	$(LOCUST) -f $(REAL_LOCUST_FILE) RealMixedUser \
+		--users 20 --spawn-rate 3 --run-time 300s \
+		--host $(APP_BASE_URL) --headless \
+		--html $(LOAD_RESULTS_DIR)/real_app_test_report.html \
+		--csv $(LOAD_RESULTS_DIR)/real_app_test || true
+	@echo "$(GREEN)Real application load tests completed$(NC)"
+
+load-test-real-scraping: load-test-install load-test-app-start ## Test real scraping workflows
+	@echo "$(BLUE)Running REAL SCRAPING workflow load tests...$(NC)"
+	@sleep 3
+	APP_BASE_URL=$(APP_BASE_URL) METRICS_URL=$(METRICS_URL) REAL_LOAD_TEST_MODE=scraping \
+	$(LOCUST) -f $(REAL_LOCUST_FILE) RealScrapingUser \
+		--users 10 --spawn-rate 2 --run-time 180s \
+		--host $(APP_BASE_URL) --headless \
+		--html $(LOAD_RESULTS_DIR)/real_scraping_test_report.html \
+		--csv $(LOAD_RESULTS_DIR)/real_scraping_test || true
+	@echo "$(GREEN)Real scraping load tests completed$(NC)"
+
+load-test-real-monitoring: load-test-install load-test-app-start ## Test real monitoring endpoints
+	@echo "$(BLUE)Running REAL MONITORING endpoint load tests...$(NC)"
+	@sleep 3
+	APP_BASE_URL=$(APP_BASE_URL) METRICS_URL=$(METRICS_URL) REAL_LOAD_TEST_MODE=monitoring \
+	$(LOCUST) -f $(REAL_LOCUST_FILE) RealMonitoringUser \
+		--users 15 --spawn-rate 5 --run-time 120s \
+		--host $(APP_BASE_URL) --headless \
+		--html $(LOAD_RESULTS_DIR)/real_monitoring_test_report.html \
+		--csv $(LOAD_RESULTS_DIR)/real_monitoring_test || true
+	@echo "$(GREEN)Real monitoring load tests completed$(NC)"
+
+load-test-real-browser: load-test-install load-test-app-start ## Test real browser automation stress
+	@echo "$(BLUE)Running REAL BROWSER automation stress tests...$(NC)"
+	@echo "$(YELLOW)WARNING: This will create multiple browser sessions!$(NC)"
+	@sleep 3
+	APP_BASE_URL=$(APP_BASE_URL) METRICS_URL=$(METRICS_URL) REAL_LOAD_TEST_MODE=browser \
+	$(LOCUST) -f $(REAL_LOCUST_FILE) BrowserStressUser \
+		--users 5 --spawn-rate 1 --run-time 180s \
+		--host $(APP_BASE_URL) --headless \
+		--html $(LOAD_RESULTS_DIR)/real_browser_test_report.html \
+		--csv $(LOAD_RESULTS_DIR)/real_browser_test || true
+	@echo "$(GREEN)Real browser stress tests completed$(NC)"
+
 load-test-results: ## Show load test results summary
 	@echo "$(BLUE)=== Load Test Results Summary ===$(NC)"
 	@if [ -d "$(LOAD_RESULTS_DIR)" ]; then \
@@ -243,15 +340,22 @@ load-test-results: ## Show load test results summary
 			echo "$(BLUE)Latest Summary:$(NC)"; \
 			cat load_test_results.json | python3 -m json.tool; \
 		fi; \
+		if [ -f "real_app_load_test_results.json" ]; then \
+			echo "$(BLUE)Real Application Results:$(NC)"; \
+			cat real_app_load_test_results.json | python3 -m json.tool; \
+		fi; \
 	else \
 		echo "$(YELLOW)No load test results found. Run 'make load-test-health' first.$(NC)"; \
 	fi
 
-load-test-clean: ## Clean load test results
-	@echo "$(YELLOW)Cleaning load test results...$(NC)"
+load-test-clean: load-test-app-stop ## Clean load test results and stop application
+	@echo "$(YELLOW)Cleaning load test results and stopping application...$(NC)"
 	@$(RM) $(LOAD_RESULTS_DIR) 2>/dev/null || true
 	@$(RM) load_test_results.json 2>/dev/null || true
-	@echo "$(GREEN)Load test results cleaned$(NC)"
+	@$(RM) real_app_load_test_results.json 2>/dev/null || true
+	@$(RM) $(APP_PID_FILE) 2>/dev/null || true
+	@$(RM) app.log 2>/dev/null || true
+	@echo "$(GREEN)Load test cleanup completed$(NC)"
 
 load-run: load-test-health ## Alias for quick load testing
 
@@ -377,7 +481,7 @@ version: ## Show version info
 	@echo "$(BLUE)UV:$(NC) $$($(UV) --version 2>/dev/null || echo 'not installed')"
 	@echo "$(BLUE)Docker:$(NC) $$($(DOCKER) --version 2>/dev/null || echo 'not installed')"
 	@if [ -f "pyproject.toml" ]; then \
-		VER=$$(grep '^version' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
+		VER=$$(grep '^version' pyproject.toml | head -1 | sed -E 's/.*"([^"]+]".*/\1/'); \
 		echo "$(BLUE)Project:$(NC) $$VER"; \
 	fi
 
@@ -387,7 +491,7 @@ version-bump: venv ## Bump version (patch)
 
 git-tag: ## Create annotated git tag from pyproject version
 	@if [ -f "pyproject.toml" ]; then \
-		VER=$$(grep '^version' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
+		VER=$$(grep '^version' pyproject.toml | head -1 | sed -E 's/.*"([^"]+]".*/\1/'); \
 		git tag -a "v$$VER" -m "Release v$$VER"; \
 		echo "$(GREEN)Tagged v$$VER$(NC)"; \
 	else echo "$(RED)No pyproject.toml found$(NC)"; fi
