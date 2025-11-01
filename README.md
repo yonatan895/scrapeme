@@ -4,49 +4,152 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-Web scraping and automation framework built with Selenium.
+Production-ready web scraping and automation framework built with Selenium, featuring comprehensive observability, fault tolerance, and cloud-native deployment capabilities.
 
-## Important notes
-- This implementation is far from complete, many parts are still missing, and some things may be redundant. I don't take any responsibility for any unintended behavior that might arise as a result of running this code, as well as legal issues from scraping sites without explicit permission and authorization. Use at your own discretion.
+## Features
 
-- The `docs/` should provide a basic understanding of the project. However, things can be out-dated as I don't update it much. For accurate information, always consult the actual source code.
-- Suggestions and contributions related to core functionality are welcome, and I might take a look at them from time to time. However, refrain from styling-related suggestions, as I don't intend to be working on those any time soon.
+**Core Automation**
+- Selenium-based web scraping with Chrome and Firefox support
+- Smart waiting strategies with configurable timeouts
+- Frame navigation and multi-step workflows
+- Authentication handling with credential management
 
-- If there is a security concern, please let me know. But please don't submit AI slope reports. You won't claim a bounty for finding a vulnerability here.
+**Production Ready**
+- Circuit breakers and rate limiting for fault tolerance
+- Prometheus metrics and structured logging
+- Health checks for Kubernetes deployment
+- Artifact capture (screenshots, HTML) for debugging
 
-- This has been mainly tested on Linux (`Ubuntu`), so it is recommended to run the project in a Linux/WSL based environment. It is discourged to use native Windows/MacOs, as there are minimal guarantees for it to be working.
+**Developer Experience**
+- Comprehensive test suite (unit, integration, load, chaos)
+- Docker support with multi-stage builds
+- Load testing with Locust integration
+- Extensive Make-based workflow automation
 
+## Quick Start
 
-## Quick start
 ```bash
+# Setup environment
 make quickstart
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
+
+# Run with example configuration
 python runner.py --config config/sites.yaml --headless --out results.json
 ```
 
-## Common make targets
-```bash
-- make venv / make venv-clear
-- make install-all / make verify-install
-- make format / make lint / make check / make test
-- make deps-tree / make deps-outdated
-- make load-run   # headless Locust; see docs/testing.md
-- docker: make docker-build / docker-run / docker-shell
-- compose: make compose-up / compose-down / compose-logs / compose-restart
+## Configuration
+
+Define scraping workflows in YAML:
+
+```yaml
+sites:
+  - name: example_site
+    base_url: "https://example.com"
+    page_load_timeout_sec: 30
+    wait_timeout_sec: 10
+    steps:
+      - name: extract_data
+        goto_url: "/page"
+        fields:
+          - name: title
+            xpath: "//h1"
+          - name: content
+            xpath: "//div[@class='content']"
+            attribute: "textContent"
 ```
 
+## Usage Examples
 
-Adjust environment via `.env` (see `.env.example`) and tune resource limits as needed.
+```bash
+# Basic scraping
+python runner.py --config sites.yaml --headless
+
+# With custom output and artifacts
+python runner.py --config sites.yaml --out data.json --artifact-dir ./captures
+
+# Parallel execution
+python runner.py --config sites.yaml --max-workers 8
+
+# Streaming JSONL output
+python runner.py --config sites.yaml --jsonl --out results.jsonl
+
+# Daemon mode for Kubernetes
+python runner.py --config sites.yaml --daemon --metrics-port 9090
+```
+
+## Development
+
+```bash
+# Development environment setup
+make dev
+
+# Code quality checks
+make format lint type-check test
+
+# Run specific test suites
+make test-unit test-integration test-load
+
+# Load testing
+make load-run
+
+# Docker development
+make docker-build-dev docker-shell
+```
+
+## Deployment
+
+**Docker**
+```bash
+# Production build
+make docker-build
+
+# Run container
+docker run -v $(pwd)/config:/app/config:ro scrapeme \
+  --config /app/config/sites.yaml --headless --daemon
+```
+
+**Docker Compose**
+```bash
+make compose-up    # Start services
+make compose-logs  # View logs
+make compose-down  # Stop services
+```
 
 ## Observability
-- Metrics on port `9090` (Prometheus format)
-- Health endpoints via `infra/server.py`:
-  - `/healthz` (liveness)
-  - `/ready` (readiness)
 
-## Project layout
-- `core/`    — scraping, browser/session mgmt, waits, metrics
-- `config/`  — typed config loader and models
-- `infra/`   — logging, signals, health server
-- `tests/`   — test suites
-- `docs/`    — documentation
+- **Metrics**: Prometheus format on port 9090 (`/metrics`)
+- **Health checks**: Liveness (`/healthz`) and readiness (`/ready`)
+- **Structured logging**: JSON format with correlation IDs
+- **Artifact capture**: Screenshots and HTML snapshots on failures
+
+## Project Structure
+
+```
+core/           # Core scraping engine and browser management
+config/         # Configuration models and loaders
+infra/          # Infrastructure components (logging, health, signals)
+tests/          # Comprehensive test suites
+docs/           # Documentation
+monitoring/     # Observability configurations
+infra/          # Kubernetes manifests and deployment configs
+```
+
+## Important Notes
+
+- This implementation is actively developed but may have incomplete features
+- Users are responsible for complying with website terms of service and legal requirements
+- Primarily tested on Linux (Ubuntu); Windows/macOS support not guaranteed
+- For production use, thorough testing in your environment is recommended
+- Security concerns should be reported responsibly
+
+## Contributing
+
+Contributions focusing on core functionality are welcome. Please:
+- Follow the existing code style and patterns
+- Add tests for new functionality
+- Ensure `make check` passes before submitting
+- Provide clear descriptions in pull requests
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
