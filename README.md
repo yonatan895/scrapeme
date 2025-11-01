@@ -33,7 +33,7 @@ make quickstart
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
 # Run with example configuration
-python runner.py --config config/sites.yaml --headless --out results.json
+make compose up
 ```
 
 ## Configuration
@@ -55,25 +55,6 @@ sites:
           - name: content
             xpath: "//div[@class='content']"
             attribute: "textContent"
-```
-
-## Usage Examples
-
-```bash
-# Basic scraping
-python runner.py --config config/sites.yaml --headless
-
-# With custom output and artifacts
-python runner.py --config config/sites.yaml --out data.json --artifact-dir ./captures
-
-# Parallel execution
-python runner.py --config config/sites.yaml --max-workers 8
-
-# Streaming JSONL output
-python runner.py --config config/sites.yaml --jsonl --out results.jsonl
-
-# Daemon mode for Kubernetes
-python runner.py --config config/sites.yaml --daemon --metrics-port 9090
 ```
 
 ## Development
