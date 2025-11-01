@@ -14,7 +14,7 @@ ifeq ($(OS),Windows_NT)
     VENV_BIN := .venv/Scripts
     PYTHON := python
     RM := rmdir /s /q
-    SEP := \\
+    SEP := \
 else
     VENV_BIN := .venv/bin
     PYTHON := python3
@@ -155,26 +155,57 @@ security-check: venv ## Security scans (bandit + safety)
 	$(BANDIT) -r core/ config/ infra/ runner.py -ll -f json -o bandit-report.json || true
 	$(SAFETY) check --json --output safety-report.json --continue-on-error || true
 
-# --- Docker & Compose ---
+# --- Docker & Compose (extended) ---
 
-compose-up: ## Start full stack (Selenium Grid + Monitoring)
-	$(DOCKER_COMPOSE) -f docker-compose.production.yaml up -d
-	@printf '  %shttp://localhost:4444%s\n' "$(BLUE)Selenium Hub:  " "$(NC)"
-	@printf '  %shttp://localhost:9091%s\n' "$(BLUE)Prometheus:    " "$(NC)"
-	@printf '  %shttp://localhost:3000%s (admin/admin)\n' "$(BLUE)Grafana:       " "$(NC)"
-	@printf '  %shttp://localhost:9093%s\n' "$(BLUE)Alertmanager:  " "$(NC)"
+docker-build: ## Build production Docker image
+	DOCKER_BUILDKIT=1 $(DOCKER) build --target production -t $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG) .
 
-compose-down: ## Stop Docker Compose stack
-	$(DOCKER_COMPOSE) -f docker-compose.production.yaml down
+docker-build-dev: ## Build dev Docker image
+	DOCKER_BUILDKIT=1 $(DOCKER) build --target dev -t $(REGISTRY)/$(IMAGE_NAME):dev .
 
-compose-logs: ## View Docker Compose logs
-	$(DOCKER_COMPOSE) -f docker-compose.production.yaml logs -f
+docker-test: ## Build and run test image
+	DOCKER_BUILDKIT=1 $(DOCKER) build --target test -t $(REGISTRY)/$(IMAGE_NAME):test .
+	$(DOCKER) run --rm $(REGISTRY)/$(IMAGE_NAME):test
 
-compose-ps: ## Show running Docker Compose containers
-	$(DOCKER_COMPOSE) -f docker-compose.production.yaml ps
+docker-push: ## Push Docker image to registry
+	@if ! $(DOCKER) info >/dev/null 2>&1; then echo "Docker not available"; exit 1; fi
+	$(DOCKER) push $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 
-compose-clean: ## Stop and remove volumes
-	$(DOCKER_COMPOSE) -f docker-compose.production.yaml down -v
+docker-run: ## Run container interactively
+	$(DOCKER) run --rm -it $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
+
+docker-shell: ## Shell into dev image
+	$(DOCKER) run --rm -it --entrypoint=/bin/bash $(REGISTRY)/$(IMAGE_NAME):dev
+
+docker-scan: ## CVE scan (non-fatal)
+	$(DOCKER) scout cves $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG) || true
+
+docker-prepare: docker-build ## Alias: prepare == build
+
+docker-clean: ## Prune and remove images safely
+	$(DOCKER) image prune -f || true
+	@IMGS=$$($(DOCKER) images $(REGISTRY)/$(IMAGE_NAME) -q); \
+	if [ -n "$$IMGS" ]; then $(DOCKER) rmi $$IMGS 2>/dev/null || true; fi
+
+compose-restart: ## Restart Docker Compose stack
+	$(DOCKER_COMPOSE) -f docker-compose.production.yaml restart
+
+# --- Documentation ---
+
+docs: venv ## Build Sphinx docs (if present)
+	@if [ -d "docs" ]; then \
+		command -v $(VENV_BIN)/sphinx-build >/dev/null 2>&1 || $(UV) pip install -e ".[docs]"; \
+		cd docs && $(VENV_BIN)/sphinx-build -b html . _build/html; \
+	else echo "no docs/ directory"; fi
+
+serve-docs: docs ## Serve docs locally (http://localhost:8000)
+	@if [ -d "docs/_build/html" ]; then \
+		echo "$(BLUE)Serving docs at http://localhost:8000$(NC)"; \
+		$(PYTHON) -m http.server 8000 -d docs/_build/html; \
+	else echo "no built docs under docs/_build/html"; fi
+
+docs-clean: ## Clean docs build
+	@if [ -d "docs/_build" ]; then $(RM) docs/_build; fi
 
 # --- Load testing ---
 
@@ -183,6 +214,94 @@ load-run: venv ## Headless Locust (USERS, SPAWN, DURATION, LOAD_BASE_URL)
 	HOST=$${LOAD_BASE_URL:-http://quotes.toscrape.com}; \
 	command -v $(VENV_BIN)/locust >/dev/null 2>&1 || $(UV) pip install -e ".[load]"; \
 	$(VENV_BIN)/locust -f tests/load/locustfile.py --headless -H "$$HOST" -u "$$USERS" -r "$$SPAWN" -t "$$DURATION"
+
+# --- Kubernetes (placeholders; non-fatal) ---
+
+k8s-deploy: ## Deploy to Kubernetes (placeholder)
+	@echo "$(YELLOW)Kubernetes deployment not implemented$(NC)"
+
+k8s-delete: ## Delete from Kubernetes (placeholder)
+	@echo "$(YELLOW)Kubernetes delete not implemented$(NC)"
+
+k8s-logs: ## View Kubernetes logs (placeholder)
+	@echo "$(YELLOW)Kubernetes logs not implemented$(NC)"
+
+k8s-status: ## Kubernetes status (placeholder)
+	@echo "$(YELLOW)Kubernetes status not implemented$(NC)"
+
+k8s-describe: ## Describe Kubernetes resources (placeholder)
+	@echo "$(YELLOW)Kubernetes describe not implemented$(NC)"
+
+k8s-shell: ## Shell into Kubernetes pod (placeholder)
+	@echo "$(YELLOW)Kubernetes shell not implemented$(NC)"
+
+k8s-port-forward: ## Port-forward Kubernetes service (placeholder)
+	@echo "$(YELLOW)Kubernetes port-forward not implemented$(NC)"
+
+k8s-restart: ## Restart Kubernetes deployment (placeholder)
+	@echo "$(YELLOW)Kubernetes restart not implemented$(NC)"
+
+# --- CI/Development Utilities ---
+
+ci-local: ## Run local CI checks (format + lint + unit)
+	$(MAKE) format
+	$(MAKE) lint
+	$(MAKE) test-unit
+	@echo "$(GREEN)Local CI checks passed$(NC)"
+
+pre-commit-run: venv ## Run pre-commit hooks (non-fatal)
+	@command -v $(PRE_COMMIT) >/dev/null 2>&1 && $(PRE_COMMIT) run --all-files || true
+
+pre-commit-update: venv ## Update pre-commit hooks (non-fatal)
+	@command -v $(PRE_COMMIT) >/dev/null 2>&1 && $(PRE_COMMIT) autoupdate || true
+
+fix: format ## Alias to auto-format
+
+# --- Project Info & Diagnostics ---
+
+version: ## Show version info
+	@echo "$(BLUE)Python:$(NC) $$($(PYTHON) --version)"
+	@echo "$(BLUE)UV:$(NC) $$($(UV) --version 2>/dev/null || echo 'not installed')"
+	@echo "$(BLUE)Docker:$(NC) $$($(DOCKER) --version 2>/dev/null || echo 'not installed')"
+	@if [ -f "pyproject.toml" ]; then \
+		VER=$$(grep '^version' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
+		echo "$(BLUE)Project:$(NC) $$VER"; \
+	fi
+
+version-bump: venv ## Bump version (patch)
+	@command -v $(VENV_BIN)/bump2version >/dev/null 2>&1 || $(UV) pip install bump2version
+	$(VENV_BIN)/bump2version patch
+
+git-tag: ## Create annotated git tag from pyproject version
+	@if [ -f "pyproject.toml" ]; then \
+		VER=$$(grep '^version' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
+		git tag -a "v$$VER" -m "Release v$$VER"; \
+		echo "$(GREEN)Tagged v$$VER$(NC)"; \
+	else echo "$(RED)No pyproject.toml found$(NC)"; fi
+
+info: ## Show project/environment info
+	@echo "$(BLUE)=== Project Information ===$(NC)"
+	@echo "$(BLUE)Repository:$(NC) $$(basename $$(pwd))"
+	@echo "$(BLUE)Python:$(NC) $$($(PYTHON) --version)"
+	@echo "$(BLUE)Virtual Env:$(NC) $$(if [ -d $(VENV) ]; then echo 'exists'; else echo 'missing'; fi)"
+	@echo "$(BLUE)Git Branch:$(NC) $$(git branch --show-current 2>/dev/null or echo 'unknown')"
+	@echo "$(BLUE)Docker:$(NC) $$($(DOCKER) --version 2>/dev/null or echo 'not installed')"
+
+deps-tree: venv ## Show dependency tree
+	@command -v $(VENV_BIN)/pipdeptree >/dev/null 2>&1 or $(UV) pip install pipdeptree
+	$(VENV_BIN)/pipdeptree
+
+deps-outdated: venv ## Show outdated dependencies
+	$(UV) pip list --outdated
+
+health-check: venv ## Basic health check
+	@echo "$(BLUE)=== Health Check ===$(NC)"
+	@echo -n "$(BLUE)Python imports:$(NC) "; $(VENV_BIN)/python -c "import core.scraper, config.models; print('✓')" 2>/dev/null or echo "✗"
+	@echo -n "$(BLUE)Selenium:$(NC) "; $(VENV_BIN)/python -c "import selenium; print('✓')" 2>/dev/null or echo "✗"
+	@echo -n "$(BLUE)Tests dir:$(NC) "; if [ -d "tests" ]; then echo "✓"; else echo "✗"; fi
+	@echo -n "$(BLUE)Docker:$(NC) "; $(DOCKER) --version >/dev/null 2>&1 and echo "✓" or echo "✗"
+
+diagnose: health-check info ## Full diagnostics
 
 # --- Shortcuts ---
 
@@ -196,4 +315,4 @@ check: format lint test-unit ## Pre-commit validation
 	@echo "$(GREEN)Checks passed$(NC)"
 
 pre-commit-install: venv ## Install pre-commit hooks
-	@command -v $(PRE_COMMIT) >/dev/null 2>&1 && $(PRE_COMMIT) install || true
+	@command -v $(PRE_COMMIT) >/dev/null 2>&1 && $(PRE_COMMIT) install or true
