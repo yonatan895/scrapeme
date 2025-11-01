@@ -132,14 +132,40 @@ jobs:
       - name: Install dev deps
         run: uv pip install --system -e ".[dev]"
 
+      - name: Check for integration tests
+        id: has_integration
+        run: |
+          if find tests/integration -name "test_*.py" -type f 2>/dev/null | grep -q .; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "✅ Integration tests found"
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No integration tests found"
+          fi
+
       - name: Selenium Grid up
+        if: steps.has_integration.outputs.found == 'true'
         run: docker compose -f docker-compose.production.yaml up -d
 
+      - name: Wait for Selenium Grid
+        if: steps.has_integration.outputs.found == 'true'
+        run: |
+          timeout 60 bash -c 'until curl -sf http://localhost:4444/status; do sleep 2; done' || {
+            echo "Selenium Grid failed to start, running without grid"
+          }
+
       - name: Integration tests
-        run: pytest -q -m integration --timeout=300 --cov-fail-under=0
+        if: steps.has_integration.outputs.found == 'true'
+        env:
+          SELENIUM_REMOTE_URL: http://localhost:4444/wd/hub
+        run: pytest -q -m integration --timeout=300 --cov-fail-under=0 -v
+
+      - name: No integration tests to run
+        if: steps.has_integration.outputs.found != 'true'
+        run: echo "No integration tests found; skipping Selenium Grid setup."
 
       - name: Teardown
-        if: always()
+        if: always() && steps.has_integration.outputs.found == 'true'
         run: docker compose -f docker-compose.production.yaml down -v
 
   # -------------------------------------
