@@ -15,12 +15,12 @@ services:
       - METRICS_PORT=9090
     
     volumes:
-      - ./sites.yaml:/app/sites.yaml:ro
+      - ./config/sites.yaml:/app/config/sites.yaml:ro
       - artifacts:/app/artifacts
       - results:/app/results
     
     command: >
-      --config sites.yaml
+      --config /app/config/sites.yaml
       --browser chrome
       --headless
       --enable-pooling
