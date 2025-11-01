@@ -3,11 +3,7 @@
 import pytest
 
 # Import only the exceptions that actually exist in core.exceptions
-from core.exceptions import (
-    ElementNotFoundError,
-    ScrapingError,
-    TimeoutError,
-)
+from core.exceptions import ElementNotFoundError, ScrapingError, TimeoutError
 
 
 @pytest.mark.unit
