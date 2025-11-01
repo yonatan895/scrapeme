@@ -1,0 +1,113 @@
+# Load Testing Configuration for ScrapeMe
+# This file provides predefined configurations for different load testing scenarios
+
+# Basic health check testing
+health_test:
+  users: 10
+  spawn_rate: 2
+  run_time: "60s"
+  environment:
+    LOAD_TEST_MODE: "health"
+    LOAD_BASE_URL: "http://localhost:9090"
+    ENABLE_EXTERNAL_TARGETS: "false"
+  command: |
+    locust -f tests/load/locustfile.py HealthUser \
+      --users 10 --spawn-rate 2 --run-time 60s \
+      --host http://localhost:9090 --headless
+
+# Stress testing for performance limits
+stress_test:
+  users: 50
+  spawn_rate: 10
+  run_time: "120s"
+  environment:
+    LOAD_TEST_MODE: "stress"
+    LOAD_BASE_URL: "http://localhost:9090"
+    ENABLE_EXTERNAL_TARGETS: "false"
+  command: |
+    locust -f tests/load/locustfile.py StressUser \
+      --users 50 --spawn-rate 10 --run-time 120s \
+      --host http://localhost:9090 --headless
+
+# Mixed scenario testing
+mixed_test:
+  users: 30
+  spawn_rate: 5
+  run_time: "180s"
+  environment:
+    LOAD_TEST_MODE: "mixed"
+    LOAD_BASE_URL: "http://localhost:9090"
+    ENABLE_EXTERNAL_TARGETS: "false"
+  command: |
+    locust -f tests/load/locustfile.py MixedUser \
+      --users 30 --spawn-rate 5 --run-time 180s \
+      --host http://localhost:9090 --headless
+
+# High-performance testing with FastHttpUser
+fast_test:
+  users: 100
+  spawn_rate: 20
+  run_time: "60s"
+  environment:
+    LOAD_TEST_MODE: "health"
+    LOAD_BASE_URL: "http://localhost:9090"
+    ENABLE_EXTERNAL_TARGETS: "false"
+  command: |
+    locust -f tests/load/locustfile.py FastHealthUser \
+      --users 100 --spawn-rate 20 --run-time 60s \
+      --host http://localhost:9090 --headless
+
+# External targets testing (requires internet)
+external_test:
+  users: 20
+  spawn_rate: 3
+  run_time: "300s"
+  environment:
+    LOAD_TEST_MODE: "mixed"
+    LOAD_BASE_URL: "http://quotes.toscrape.com"
+    ENABLE_EXTERNAL_TARGETS: "true"
+  command: |
+    locust -f tests/load/locustfile.py ExternalUser \
+      --users 20 --spawn-rate 3 --run-time 300s \
+      --host http://quotes.toscrape.com --headless
+
+# CI/CD pipeline testing (quick validation)
+ci_test:
+  users: 5
+  spawn_rate: 2
+  run_time: "30s"
+  environment:
+    LOAD_TEST_MODE: "health"
+    LOAD_BASE_URL: "http://localhost:9090"
+    ENABLE_EXTERNAL_TARGETS: "false"
+  command: |
+    locust -f tests/load/locustfile.py HealthUser \
+      --users 5 --spawn-rate 2 --run-time 30s \
+      --host http://localhost:9090 --headless
+
+# Production-like load testing
+production_test:
+  users: 200
+  spawn_rate: 50
+  run_time: "600s"
+  environment:
+    LOAD_TEST_MODE: "mixed"
+    LOAD_BASE_URL: "http://localhost:9090"
+    ENABLE_EXTERNAL_TARGETS: "false"
+  command: |
+    locust -f tests/load/locustfile.py \
+      --users 200 --spawn-rate 50 --run-time 600s \
+      --host http://localhost:9090 --headless
+
+# Usage examples:
+# 1. Basic health check: make load-test-health
+# 2. Stress test: make load-test-stress  
+# 3. Mixed scenarios: make load-test-mixed
+# 4. Fast performance: make load-test-fast
+# 5. External targets: make load-test-external
+# 6. CI pipeline: make load-test-ci
+# 7. Production load: make load-test-production
+#
+# Or run manually:
+# export LOAD_TEST_MODE=health LOAD_BASE_URL=http://localhost:9090
+# locust -f tests/load/locustfile.py --users 10 --spawn-rate 2 --run-time 60s --headless
