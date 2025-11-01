@@ -60,25 +60,25 @@ class TestURLNormalizationProperties:
         for char in normalized:
             assert ord(char) >= 32
 
-            @given(
-                valid_urls(),
-                st.dictionaries(
-                    st.text(min_size=1, max_size=10),
-                    st.text(max_size=20),
-                    min_size=1,
-                    max_size=5,
-                ),
-            )
-            def test_query_params_preserved(self, base_url: str, params: dict):
-                """Query parameters should be preserved after normalization."""
-                from urllib.parse import parse_qs, urlencode, urlparse
+    @given(
+        valid_urls(),
+        st.dictionaries(
+            st.text(min_size=1, max_size=10),
+            st.text(max_size=20),
+            min_size=1,
+            max_size=5,
+        ),
+    )
+    def test_query_params_preserved(self, base_url: str, params: dict):
+        """Query parameters should be preserved after normalization."""
+        from urllib.parse import parse_qs, urlencode, urlparse
 
-                url_with_params = f"{base_url}?{urlencode(params)}"
-                normalized = normalize_url(url_with_params)
+        url_with_params = f"{base_url}?{urlencode(params)}"
+        normalized = normalize_url(url_with_params)
 
-                # All param keys should be in normalized URL's query string
-                parsed_url = urlparse(normalized)
-                query_params = parse_qs(parsed_url.query)
+        # All param keys should be in normalized URL's query string
+        parsed_url = urlparse(normalized)
+        query_params = parse_qs(parsed_url.query)
 
-                for key in params:
-                    assert key in query_params
+        for key in params:
+            assert key in query_params
