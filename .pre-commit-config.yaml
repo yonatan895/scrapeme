@@ -59,6 +59,9 @@ repos:
         additional_dependencies: [
           types-PyYAML,
           selenium,
+          pytest,
+          hypothesis,
+          prometheus-client,
         ]
 
   # Security
