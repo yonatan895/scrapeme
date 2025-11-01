@@ -20,7 +20,7 @@ def dumps_bytes(data: Any) -> bytes:
     and encodes to UTF-8 bytes.
     """
     if HAS_ORJSON and _orjson is not None:
-        return _orjson.dumps(data)  # type: ignore[no-any-return]
+        return _orjson.dumps(data)
     return _stdlib_json.dumps(data).encode("utf-8")
 
 
