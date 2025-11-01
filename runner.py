@@ -1,5 +1,3 @@
-"""Production-grade orchestration with observability and fault tolerance."""
-
 from __future__ import annotations
 
 import argparse
@@ -22,7 +20,7 @@ from core.exceptions import AutomationError
 from core.metrics import Metrics
 from core.scraper import SiteScraper
 from core.secrets import EnvSecrets
-from core.serialization import to_jsonable
+from core.serialization import to_jsonable, dumps as fast_dumps
 from core.waits import Waiter
 from infra.health import HealthRegistry, HealthStatus
 from infra.logging_config import configure_logging
@@ -62,10 +60,8 @@ def format_error_result(site_name: str, error: Exception) -> dict[str, Any]:
 
     # Check for dynamically attached artifact using hasattr
     if hasattr(error, "_capture_artifact"):
-        # Import only when needed to avoid circular imports
         from core.capture import CapturedArtifact
 
-        # Safe attribute access with getattr
         artifact = getattr(error, "_capture_artifact", None)
         if artifact is not None and isinstance(artifact, CapturedArtifact):
             result["error"]["artifacts"] = {
@@ -76,7 +72,6 @@ def format_error_result(site_name: str, error: Exception) -> dict[str, Any]:
                 "url": artifact.url,
             }
 
-    # Check for timeout_sec attribute on TimeoutError
     if hasattr(error, "timeout_sec"):
         timeout = getattr(error, "timeout_sec", None)
         if timeout is not None:
@@ -169,6 +164,8 @@ def main() -> int:
     parser.add_argument("--no-artifacts", action="store_true")
     parser.add_argument("--enable-pooling", action="store_true")
     parser.add_argument("--metrics-port", type=int, default=9090)
+    parser.add_argument("--jsonl", action="store_true", help="Write JSONL output (one line per site)")
+    parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output (slower)")
 
     args = parser.parse_args()
 
@@ -205,6 +202,52 @@ def main() -> int:
     results: list[dict[str, Any]] = []
     max_workers = min(args.max_workers, max(1, len(sites)))
 
+    if args.jsonl:
+        # Stream JSON lines as results become available
+        try:
+            with args.out.open("wb") as fp:
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {
+                        executor.submit(
+                            process_site,
+                            site,
+                            browser=args.browser,
+                            headless=args.headless,
+                            incognito=args.incognito,
+                            download_dir=args.download_dir,
+                            remote_url=args.remote_url,
+                            chromedriver_path=args.chromedriver_path,
+                            artifact_dir=artifact_dir,
+                            enable_pooling=args.enable_pooling,
+                        ): site.name
+                        for site in sites
+                    }
+
+                    for future in as_completed(futures):
+                        if shutdown_event.is_set():
+                            logger.warning("Shutdown requested")
+                            executor.shutdown(wait=False, cancel_futures=True)
+                            break
+
+                        site_name = futures[future]
+                        try:
+                            result = future.result()
+                            logger.info(f"✓ Completed: {site_name}")
+                        except AutomationError as e:
+                            logger.error(f"✗ Automation error on {site_name}: {e}")
+                            result = format_error_result(site_name, e)
+                        except Exception as e:
+                            logger.exception(f"✗ Unhandled error on {site_name}")
+                            result = format_error_result(site_name, e)
+
+                        fp.write(fast_dumps(to_jsonable(result)))
+                        fp.write(b"\n")
+        except Exception:
+            logger.exception("Failed to write results")
+            return 1
+        return 0
+
+    # Default: collect in-memory and dump once (compact by default)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(
@@ -241,8 +284,8 @@ def main() -> int:
                 results.append(format_error_result(site_name, e))
 
     try:
-        output = json.dumps(to_jsonable(results), indent=2, ensure_ascii=False)
-        args.out.write_text(output, encoding="utf-8")
+        output_bytes = fast_dumps(to_jsonable(results), pretty=args.pretty)
+        args.out.write_bytes(output_bytes)
         logger.info(f"Results written to {args.out}")
     except Exception:
         logger.exception("Failed to write results")
