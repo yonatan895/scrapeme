@@ -14,7 +14,7 @@ ifeq ($(OS),Windows_NT)
     VENV_BIN := .venv/Scripts
     PYTHON := python
     RM := rmdir /s /q
-    SEP := \
+    SEP := \\
 else
     VENV_BIN := .venv/bin
     PYTHON := python3
@@ -27,7 +27,7 @@ VENV := .venv
 UV := uv
 PYTEST := $(VENV_BIN)/pytest
 BLACK := $(VENV_BIN)/black
-ISORT := $(VENV_BIN)/isort
+ISROT := $(VENV_BIN)/isort
 MYPY := $(VENV_BIN)/mypy
 PYLINT := $(VENV_BIN)/pylint
 BANDIT := $(VENV_BIN)/bandit
@@ -108,7 +108,7 @@ compile-requirements: check-uv ## Regenerate requirements files
 	$(UV) pip compile pyproject.toml --extra dev --extra lint -o requirements-dev.txt
 	$(UV) pip compile pyproject.toml --all-extras -o requirements-all.txt
 
-verify-install: venv ## Quick import smoke
+verify-install: venv ## Quick import smoke test
 	$(VENV_BIN)/python -c "import selenium, tenacity, yaml; print('OK')"
 
 # --- Testing ---
