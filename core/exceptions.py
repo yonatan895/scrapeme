@@ -11,6 +11,8 @@ class ErrorContext:
     step_name: str | None = None
     field_name: str | None = None
     xpath: str | None = None
+    url: str | None = None
+    frame_spec: str | None = None
 
 
 class AppTimeoutError(Exception):
@@ -36,3 +38,20 @@ class ExtractionError(Exception):
     def __init__(self, message: str, context: ErrorContext | None = None):
         super().__init__(message)
         self.context = context
+
+
+# Domain-specific higher-level errors referenced across modules
+class ConfigError(Exception):
+    pass
+
+
+class FrameError(Exception):
+    pass
+
+
+class LoginError(Exception):
+    pass
+
+
+class AutomationError(Exception):
+    pass
