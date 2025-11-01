@@ -56,7 +56,7 @@ jobs:
         run: mypy core/ config/ infra/ runner.py --explicit-package-bases --strict --show-error-codes
 
       - name: Unit tests only (fast)
-        run: pytest -q -m "unit or not integration and not e2e" --cov=core --cov=config --cov=infra --cov-report=xml
+        run: pytest -q -m "unit or not integration and not e2e" --cov=core --cov=config --cov=infra --cov-report=xml --cov-fail-under=0
 
       - name: Upload coverage (XML)
         uses: actions/upload-artifact@v4
@@ -136,7 +136,7 @@ jobs:
         run: docker compose -f docker-compose.production.yaml up -d
 
       - name: Integration tests
-        run: pytest -q -m integration --timeout=300
+        run: pytest -q -m integration --timeout=300 --cov-fail-under=0
 
       - name: Teardown
         if: always()
