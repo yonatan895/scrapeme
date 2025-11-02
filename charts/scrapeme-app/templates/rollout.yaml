@@ -1,0 +1,107 @@
+{{- if .Values.argoRollouts.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "scrapeme-app.fullname" . }}
+  labels:
+    {{- include "scrapeme-app.labels" . | nindent 4 }}
+  annotations:
+    rollout.argoproj.io/revision: "{{ .Release.Revision }}"
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "scrapeme-app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "scrapeme-app.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: scraper
+        version: "{{ .Values.image.tag }}"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.metrics.port }}"
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "scrapeme-app.serviceAccountName" . }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: app
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.service.port }}
+          env:
+            {{- toYaml .Values.env | nindent 12 }}
+          {{- if .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml .Values.extraEnvFrom | nindent 12 }}
+          {{- end }}
+          args: {{- toYaml .Values.args | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: {{ .Values.config.mountPath }}
+              readOnly: true
+            - name: artifacts
+              mountPath: /app/artifacts
+            - name: results
+              mountPath: /app/results
+          startupProbe:
+            {{- toYaml .Values.healthChecks.startupProbe | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.healthChecks.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.healthChecks.readinessProbe | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "scrapeme-app.fullname" . }}-config
+        - name: artifacts
+          persistentVolumeClaim:
+            claimName: {{ .Values.artifactsPVC.name }}
+        - name: results
+          persistentVolumeClaim:
+            claimName: {{ .Values.resultsPVC.name }}
+  # Enterprise: Progressive delivery strategy
+  strategy:
+    {{- if eq .Values.argoRollouts.strategy "canary" }}
+    canary:
+      maxSurge: {{ .Values.argoRollouts.canary.maxSurge | default "25%" }}
+      maxUnavailable: {{ .Values.argoRollouts.canary.maxUnavailable | default 0 }}
+      steps:
+      {{- range .Values.argoRollouts.canary.steps }}
+      - setWeight: {{ .weight }}
+      - pause:
+          duration: {{ .duration | default "2m" }}
+      {{- end }}
+      analysis:
+        templates:
+        - templateName: {{ include "scrapeme-app.fullname" . }}-success-rate
+        args:
+        - name: service-name
+          value: {{ include "scrapeme-app.fullname" . }}
+        - name: namespace
+          value: {{ .Release.Namespace }}
+    {{- else if eq .Values.argoRollouts.strategy "blueGreen" }}
+    blueGreen:
+      activeService: {{ include "scrapeme-app.fullname" . }}
+      previewService: {{ include "scrapeme-app.fullname" . }}-preview
+      autoPromotionEnabled: {{ .Values.argoRollouts.blueGreen.autoPromotionEnabled | default false }}
+      scaleDownDelaySeconds: {{ .Values.argoRollouts.blueGreen.scaleDownDelay | default 300 }}
+      prePromotionAnalysis:
+        templates:
+        - templateName: {{ include "scrapeme-app.fullname" . }}-success-rate
+        args:
+        - name: service-name
+          value: {{ include "scrapeme-app.fullname" . }}-preview
+    {{- end }}
+{{- end }}
