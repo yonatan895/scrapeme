@@ -29,6 +29,8 @@ dependencies = [
     "psutil>=7.1.1,<8.0",
     "lxml>=6.0.2",
     "orjson>=3.9.0",  # High-performance JSON encoder/decoder for all clients
+    "pydantic>=2.8.0,<3.0.0",  # High-performance data validation and serialization
+    "pydantic[email]>=2.8.0,<3.0.0",  # Email validation extras
 ]
 
 # Optional dependency groups
