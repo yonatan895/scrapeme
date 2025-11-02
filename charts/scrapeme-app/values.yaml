@@ -1,84 +1,227 @@
+# Enterprise-grade ScrapeMe application values
 replicaCount: 2
+
 image:
   registry: ghcr.io
   repository: yonatan895/scrapeme
   tag: latest
   pullPolicy: IfNotPresent
+  # Enterprise: Image verification
+  digest: ""
+  pullSecrets: []
+
 service:
   type: ClusterIP
   port: 9090
+  # Enterprise: Additional ports for debugging/profiling
+  debugPort: 8080
+  pprofPort: 6060
+  annotations: {}
+
 ingress:
   enabled: false
-  className: ""
+  className: "nginx"
   hosts: []
   tls: []
+  # Enterprise: Security headers and rate limiting
+  annotations:
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+
 autoscaling:
   enabled: true
   minReplicas: 2
   maxReplicas: 10
   cpu: 70
   memory: 80
+  # Enterprise: Custom metrics and predictive scaling
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 180
+  customMetrics:
+    enabled: false
+    metrics: []
+
 resources:
   requests:
     cpu: 500m
     memory: 512Mi
+    ephemeral-storage: 1Gi
   limits:
     cpu: 2000m
     memory: 2Gi
+    ephemeral-storage: 5Gi
+
+# Enterprise: Enhanced security contexts with seccomp
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 10001
   runAsGroup: 10001
   fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+  supplementalGroups: []
+
 securityContext:
   allowPrivilegeEscalation: false
-  readOnlyRootFilesystem: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
   capabilities:
     drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+
 serviceAccount:
   create: true
   name: ""
+  # Enterprise: Service account annotations for cloud IAM
+  annotations: {}
+  automountServiceAccountToken: false
+
 rbac:
   create: true
+  # Enterprise: Minimal permissions principle
+  rules:
+    - apiGroups: [""]
+      resources: ["pods"]
+      verbs: ["get", "list"]
+    - apiGroups: [""]
+      resources: ["configmaps"]
+      verbs: ["get", "list"]
+      resourceNames: []
+
 pdb:
   enabled: true
   minAvailable: 1
+  # Enterprise: Advanced disruption policies
+  maxUnavailable: ""
+  unhealthyPodEvictionPolicy: IfHealthyBudget
+
+# Enterprise: Zero-trust network policies
 networkPolicy:
   enabled: true
-  allowPrometheusNamespace: ""
-  allowIngressNamespaces: []
+  allowPrometheusNamespace: "monitoring"
+  allowIngressNamespaces: ["ingress-nginx"]
+  # Enhanced egress controls
+  egressRules:
+    - to: []
+      ports:
+      - protocol: TCP
+        port: 53
+      - protocol: UDP
+        port: 53
+    - to: []
+      ports:
+      - protocol: TCP
+        port: 443  # HTTPS only
+    - to:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: selenium-hub
+      ports:
+      - protocol: TCP
+        port: 4444
+  # Block HTTP egress for security
+  denyHTTP: true
+
 config:
   sites: |
     sites: []
   mountPath: /app/config
   fileName: sites.yaml
+  # Enterprise: Configuration validation
+  validation:
+    enabled: true
+    schema: "/app/schemas/sites-schema.json"
+
+# Enterprise: Advanced storage with backup
 artifactsPVC:
   enabled: true
   name: scrapeme-artifacts
   accessModes: ["ReadWriteMany"]
   size: 10Gi
-  storageClassName: ""
+  storageClassName: "fast-ssd-retain"
+  # Enterprise: Backup annotations
+  annotations:
+    backup.velero.io/backup-volumes: "artifacts"
+    backup.velero.io/backup-volumes-excludes: "tmp"
+
 resultsPVC:
   enabled: true
   name: scrapeme-results
   accessModes: ["ReadWriteMany"]
   size: 5Gi
-  storageClassName: ""
+  storageClassName: "fast-ssd-retain"
+  annotations:
+    backup.velero.io/backup-volumes: "results"
+
 metrics:
   port: 9090
   path: /metrics
+  # Enterprise: Metrics security
+  authentication:
+    enabled: false
+    secretName: ""
+  # Enterprise: Custom metrics
+  custom:
+    enabled: true
+    port: 9091
+    path: /custom-metrics
+
+# Enterprise: ServiceMonitor with advanced configuration
 prometheus:
   serviceMonitor:
-    enabled: false
-    labels: {}
+    enabled: true
+    labels:
+      team: platform
+      app: scrapeme
     interval: 15s
+    scrapeTimeout: 10s
+    honorLabels: true
+    metricRelabelings: []
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_pod_name]
+      targetLabel: pod
+    - sourceLabels: [__meta_kubernetes_pod_node_name]
+      targetLabel: node
+
+# Enterprise: Environment configuration with secrets
 env:
   - name: METRICS_PORT
     value: "9090"
   - name: REMOTE_URL
     value: "http://selenium-hub:4444"
-extraEnv: []
-extraEnvFrom: []
+  - name: LOG_LEVEL
+    value: "INFO"
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: "http://jaeger-collector:14268/api/traces"
+
+# Enterprise: External secrets integration
+extraEnvFrom:
+  - secretRef:
+      name: scrapeme-secrets
+      optional: true
+  - configMapRef:
+      name: scrapeme-env-config
+      optional: true
+
 args:
   - "--config"
   - "/app/config/sites.yaml"
@@ -94,7 +237,130 @@ args:
   - "--daemon"
   - "--artifact-dir"
   - "/app/artifacts"
-nodeSelector: {}
-tolerations: []
-affinity: {}
-topologySpreadConstraints: []
+  - "--results-dir"
+  - "/app/results"
+
+# Enterprise: Advanced scheduling
+nodeSelector:
+  kubernetes.io/arch: amd64
+  node-type: compute
+
+tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "scrapeme"
+    effect: "NoSchedule"
+
+# Enterprise: Pod anti-affinity for HA
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values: [scrapeme-app]
+        topologyKey: kubernetes.io/hostname
+    - weight: 50
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values: [scrapeme-app]
+        topologyKey: topology.kubernetes.io/zone
+
+# Enterprise: Topology spread constraints for availability
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: scrapeme-app
+  - maxSkew: 2
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: scrapeme-app
+
+# Enterprise: Health checks configuration
+healthChecks:
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: 9090
+      httpHeaders:
+      - name: User-Agent
+        value: "k8s-liveness-probe"
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 9090
+      httpHeaders:
+      - name: User-Agent
+        value: "k8s-readiness-probe"
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 3
+    failureThreshold: 3
+    successThreshold: 1
+  startupProbe:
+    httpGet:
+      path: /healthz
+      port: 9090
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+    successThreshold: 1
+
+# Enterprise: Lifecycle management
+lifecycle:
+  preStop:
+    exec:
+      command: ["/bin/sh", "-c", "sleep 15"]
+
+# Enterprise: Pod priority for critical workloads
+priorityClassName: "scrapeme-high-priority"
+
+# Enterprise: Additional volumes for enterprise features
+extraVolumes:
+  - name: tmp-volume
+    emptyDir:
+      sizeLimit: 1Gi
+  - name: cache-volume
+    emptyDir:
+      sizeLimit: 2Gi
+
+extraVolumeMounts:
+  - name: tmp-volume
+    mountPath: /tmp
+  - name: cache-volume
+    mountPath: /app/cache
+
+# Enterprise: Chaos engineering
+chaosEngineering:
+  enabled: false
+  litmus:
+    experiments: ["pod-delete", "container-kill"]
+
+# Enterprise: Cost optimization
+costOptimization:
+  enabled: true
+  verticalPodAutoscaling:
+    enabled: false
+    updatePolicy:
+      updateMode: "Auto"
+  podGarbageCollection:
+    enabled: true
+    successfulJobsHistoryLimit: 3
+    failedJobsHistoryLimit: 1
