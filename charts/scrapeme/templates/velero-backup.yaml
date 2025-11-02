@@ -1,0 +1,31 @@
+{{- if .Values.backup.velero.enabled }}
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: {{ include "scrapeme.fullname" . }}-backup
+  labels:
+    {{- include "scrapeme.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.backup.velero.schedule | quote }}
+  template:
+    includedNamespaces:
+    {{- range .Values.backup.velero.namespaces }}
+    - {{ . }}
+    {{- end }}
+    {{- if .Values.backup.velero.includedResources }}
+    includedResources:
+    {{- toYaml .Values.backup.velero.includedResources | nindent 4 }}
+    {{- end }}
+    {{- if .Values.backup.velero.excludedResources }}
+    excludedResources:
+    {{- toYaml .Values.backup.velero.excludedResources | nindent 4 }}
+    {{- end }}
+    storageLocation: {{ .Values.backup.velero.storageLocation }}
+    volumeSnapshotLocations:
+    {{- toYaml .Values.backup.velero.volumeSnapshotLocations | nindent 4 }}
+    ttl: {{ .Values.backup.velero.ttl }}
+    metadata:
+      labels:
+        backup-type: scheduled
+        environment: {{ .Values.environment }}
+{{- end }}

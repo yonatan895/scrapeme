@@ -1,0 +1,30 @@
+apiVersion: v2
+name: scrapeme
+description: Umbrella chart for ScrapeMe platform (app, selenium grid, observability)
+icon: https://raw.githubusercontent.com/kubernetes/community/master/icons/svg/resources/labeled/cronjob.svg
+home: https://github.com/yonatan895/scrapeme
+sources:
+  - https://github.com/yonatan895/scrapeme
+keywords:
+  - selenium
+  - scraping
+  - observability
+  - prometheus
+  - grafana
+  - argocd
+  - gitops
+maintainers:
+  - name: ScrapeMe Maintainers
+    email: maintainer@example.com
+version: 0.1.0
+appVersion: "2.0.0"
+dependencies:
+  - name: scrapeme-app
+    version: 0.1.0
+    repository: "file://../scrapeme-app"
+  - name: selenium-grid
+    version: 0.1.0
+    repository: "file://../selenium-grid"
+  - name: observability
+    version: 0.1.0
+    repository: "file://../observability"

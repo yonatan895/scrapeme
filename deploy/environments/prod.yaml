@@ -1,0 +1,298 @@
+# Production environment values - Enterprise Grade
+environment: production
+
+scrapeme-app:
+  replicaCount: 3
+  image:
+    tag: v2.0.0
+    # Enterprise: Pin by digest for immutability
+    digest: "sha256:abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab"
+    pullPolicy: Always
+  
+  # Enterprise: Production autoscaling
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    cpu: 60
+    memory: 70
+    behavior:
+      scaleUp:
+        stabilizationWindowSeconds: 60
+        policies:
+        - type: Pods
+          value: 3
+          periodSeconds: 60
+      scaleDown:
+        stabilizationWindowSeconds: 600
+        policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 300
+  
+  # Enterprise: Production resources
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+      ephemeral-storage: 2Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+      ephemeral-storage: 10Gi
+  
+  # Enterprise: PDB for high availability
+  pdb:
+    enabled: true
+    minAvailable: 2
+    maxUnavailable: ""
+    unhealthyPodEvictionPolicy: IfHealthyBudget
+  
+  # Enterprise: Priority for critical workloads
+  priorityClassName: "scrapeme-high-priority"
+  
+  # Enterprise: External secrets integration
+  externalSecrets:
+    enabled: true
+    refreshInterval: "10m"
+    secretStore:
+      name: vault-backend
+      kind: ClusterSecretStore
+    vault:
+      path: "secret/scrapeme/production"
+    additionalSecrets:
+    - key: database_password
+      vaultKey: database
+      property: password
+    - key: api_key_external
+      vaultKey: external-apis
+      property: key
+  
+  # Enterprise: Enhanced storage with backup
+  artifactsPVC:
+    size: 100Gi
+    storageClassName: "fast-ssd-retain-encrypted"
+    annotations:
+      backup.velero.io/backup-volumes: "artifacts"
+      storage.kubernetes.io/encrypted: "true"
+  
+  resultsPVC:
+    size: 50Gi
+    storageClassName: "fast-ssd-retain-encrypted"
+    annotations:
+      backup.velero.io/backup-volumes: "results"
+      storage.kubernetes.io/encrypted: "true"
+  
+  # Enterprise: ServiceMonitor enabled
+  prometheus:
+    serviceMonitor:
+      enabled: true
+      operator: true
+      labels:
+        team: platform
+        environment: production
+        monitoring: prometheus
+      interval: 15s
+      scrapeTimeout: 10s
+      honorLabels: true
+      basicAuth:
+        enabled: false
+      tlsConfig:
+        enabled: false
+      relabelings:
+      - sourceLabels: [__meta_kubernetes_pod_name]
+        targetLabel: pod
+      - sourceLabels: [__meta_kubernetes_pod_node_name]
+        targetLabel: node
+      - sourceLabels: [__meta_kubernetes_namespace]
+        targetLabel: namespace
+        replacement: "scrapeme-prod"
+  
+  # Enterprise: Resource governance
+  resourceQuota:
+    enabled: true
+    requests:
+      cpu: "50"
+      memory: "100Gi"
+      ephemeralStorage: "200Gi"
+    limits:
+      cpu: "100"
+      memory: "200Gi"
+      ephemeralStorage: "500Gi"
+    objects:
+      pods: 50
+      pvcs: 20
+      services: 20
+      secrets: 50
+      configmaps: 50
+      networkpolicies: 20
+  
+  limitRange:
+    enabled: true
+    container:
+      defaultLimits:
+        cpu: "2"
+        memory: "4Gi"
+        ephemeralStorage: "5Gi"
+      defaultRequests:
+        cpu: "200m"
+        memory: "256Mi"
+        ephemeralStorage: "1Gi"
+      min:
+        cpu: "100m"
+        memory: "128Mi"
+      max:
+        cpu: "8"
+        memory: "16Gi"
+    pod:
+      min:
+        cpu: "100m"
+        memory: "128Mi"
+      max:
+        cpu: "16"
+        memory: "32Gi"
+    pvc:
+      min: "1Gi"
+      max: "1Ti"
+  
+  # Enterprise: Zero-trust networking
+  networkPolicy:
+    baseline:
+      enabled: true
+    enabled: true
+    allowPrometheusNamespace: "monitoring"
+    allowIngressNamespaces: ["ingress-nginx", "istio-system"]
+    egressRules:
+      denyHTTP: true
+  
+  # Enterprise: Storage class
+  storageClass:
+    create: true
+    name: "fast-ssd-retain-encrypted"
+    provisioner: "ebs.csi.aws.com"
+    parameters:
+      type: "gp3"
+      encrypted: "true"
+      kmsKeyId: "alias/kubernetes-storage"
+    reclaimPolicy: "Retain"
+    volumeBindingMode: "WaitForFirstConsumer"
+    allowVolumeExpansion: true
+  
+  # Enterprise: Istio service mesh
+  istio:
+    inject: true
+    gateway:
+      enabled: true
+      hosts:
+      - scrapeme.company.com
+  
+  # Enterprise: Advanced scheduling
+  nodeSelector:
+    kubernetes.io/arch: amd64
+    node-type: compute
+    instance-class: performance
+  
+  tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "scrapeme"
+    effect: "NoSchedule"
+  - key: "performance"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+  
+  # Enterprise: Topology constraints for multi-AZ
+  topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: scrapeme-app
+  - maxSkew: 2
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: scrapeme-app
+
+# Enterprise: Progressive delivery with Argo Rollouts
+argoRollouts:
+  enabled: true
+  strategy: "canary"
+  prometheus:
+    address: "http://prometheus-kube-prometheus-prometheus:9090"
+  canary:
+    maxSurge: "25%"
+    maxUnavailable: 0
+    steps:
+    - weight: 20
+      duration: "5m"
+    - weight: 50
+      duration: "10m"
+    - weight: 80
+      duration: "5m"
+  blueGreen:
+    autoPromotionEnabled: false
+    scaleDownDelay: 600
+
+selenium-grid:
+  chrome:
+    replicas: 5
+    hpa:
+      enabled: true
+      minReplicas: 5
+      maxReplicas: 20
+      cpu: 60
+      memory: 70
+    resources:
+      requests:
+        cpu: 2000m
+        memory: 4Gi
+      limits:
+        cpu: 4000m
+        memory: 8Gi
+    devShmSize: 4Gi
+  hub:
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+
+# Enterprise: Enhanced observability
+observability-enterprise:
+  enabled: true
+  prometheus:
+    enterprise: true
+  jaeger:
+    enabled: true
+  tempo:
+    enabled: false
+
+# Legacy observability (disabled when enterprise enabled)
+observability:
+  enabled: false
+
+# Enterprise: Backup configuration
+backup:
+  velero:
+    enabled: true
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    namespaces:
+    - "scrapeme"
+    storageLocation: "aws-backup-production"
+    volumeSnapshotLocations:
+    - "aws-snapshot-production"
+    ttl: "720h"  # 30 days
+    includedResources:
+    - "persistentvolumeclaims"
+    - "persistentvolumes"
+    - "secrets"
+    - "configmaps"
+    excludedResources:
+    - "events"
+    - "events.events.k8s.io"

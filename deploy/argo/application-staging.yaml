@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: scrapeme-staging
+  labels:
+    name: scrapeme-staging
+    environment: staging
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: scrapeme-staging
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: scrapeme-staging
+  source:
+    repoURL: https://github.com/yonatan895/scrapeme
+    targetRevision: feat/kubernetes-orchestration
+    path: charts/scrapeme
+    helm:
+      valueFiles:
+        - deploy/environments/staging.yaml
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

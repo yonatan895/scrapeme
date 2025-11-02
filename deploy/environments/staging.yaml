@@ -1,0 +1,168 @@
+# Staging environment values - Enterprise Testing
+environment: staging
+
+scrapeme-app:
+  replicaCount: 2
+  image:
+    tag: staging
+    # Enterprise: Pin staging builds by digest
+    digest: "sha256:staging1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+    pullPolicy: Always
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    cpu: 65
+    memory: 75
+  
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+      ephemeral-storage: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+      ephemeral-storage: 5Gi
+  
+  # Enterprise: Enable progressive delivery testing
+  argoRollouts:
+    enabled: true
+    strategy: "canary"
+    prometheus:
+      address: "http://prometheus:9090"
+    canary:
+      maxSurge: "50%"
+      maxUnavailable: 0
+      steps:
+      - weight: 25
+        duration: "2m"
+      - weight: 75
+        duration: "3m"
+  
+  # Enterprise: External secrets for staging
+  externalSecrets:
+    enabled: true
+    refreshInterval: "5m"
+    secretStore:
+      name: vault-backend
+      kind: ClusterSecretStore
+    vault:
+      path: "secret/scrapeme/staging"
+  
+  # Enterprise: Resource governance
+  resourceQuota:
+    enabled: true
+    requests:
+      cpu: "20"
+      memory: "40Gi"
+      ephemeralStorage: "100Gi"
+    limits:
+      cpu: "40"
+      memory: "80Gi"
+      ephemeralStorage: "200Gi"
+    objects:
+      pods: 30
+      pvcs: 10
+      services: 10
+      secrets: 30
+      configmaps: 30
+      networkpolicies: 10
+  
+  limitRange:
+    enabled: true
+    container:
+      defaultLimits:
+        cpu: "1"
+        memory: "2Gi"
+        ephemeralStorage: "2Gi"
+      defaultRequests:
+        cpu: "100m"
+        memory: "128Mi"
+        ephemeralStorage: "500Mi"
+      min:
+        cpu: "50m"
+        memory: "64Mi"
+      max:
+        cpu: "4"
+        memory: "8Gi"
+    pod:
+      min:
+        cpu: "50m"
+        memory: "64Mi"
+      max:
+        cpu: "8"
+        memory: "16Gi"
+    pvc:
+      min: "1Gi"
+      max: "500Gi"
+  
+  # Enterprise: Network policies
+  networkPolicy:
+    baseline:
+      enabled: true
+    allowPrometheusNamespace: "monitoring"
+    allowIngressNamespaces: ["ingress-nginx"]
+  
+  # Enterprise: ServiceMonitor enabled
+  prometheus:
+    serviceMonitor:
+      enabled: true
+      operator: true
+      labels:
+        team: platform
+        environment: staging
+      interval: 30s
+  
+  priorityClassName: "scrapeme-high-priority"
+  
+  artifactsPVC:
+    size: 50Gi
+    storageClassName: "standard-retain"
+  
+  resultsPVC:
+    size: 25Gi
+    storageClassName: "standard-retain"
+
+selenium-grid:
+  chrome:
+    replicas: 2
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      cpu: 70
+      memory: 80
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+      limits:
+        cpu: 3000m
+        memory: 6Gi
+
+# Enterprise: Enhanced observability for staging
+observability-enterprise:
+  enabled: true
+  prometheus:
+    enterprise: false  # Use basic stack in staging
+  jaeger:
+    enabled: true
+
+observability:
+  enabled: true
+  prometheus:
+    retention: 7d
+
+# Enterprise: Backup configuration
+backup:
+  velero:
+    enabled: true
+    schedule: "0 3 * * *"  # Daily at 3 AM
+    namespaces:
+    - "scrapeme-staging"
+    storageLocation: "aws-backup-staging"
+    volumeSnapshotLocations:
+    - "aws-snapshot-staging"
+    ttl: "168h"  # 7 days

@@ -1,0 +1,35 @@
+# Enterprise: Require resource limits and requests
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-pod-resources
+  annotations:
+    policies.kyverno.io/title: Require Pod Resources
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+spec:
+  validationFailureAction: enforce
+  background: true
+  rules:
+  - name: validate-resources
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+          namespaces:
+          - scrapeme
+          - scrapeme-staging
+    validate:
+      message: "Resource requests and limits are required"
+      pattern:
+        spec:
+          containers:
+          - name: "*"
+            resources:
+              requests:
+                memory: "?*"
+                cpu: "?*"
+              limits:
+                memory: "?*"
+                cpu: "?*"

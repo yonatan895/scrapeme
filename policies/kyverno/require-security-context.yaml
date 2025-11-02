@@ -1,0 +1,37 @@
+# Enterprise: Enforce security context requirements
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-security-context
+  annotations:
+    policies.kyverno.io/title: Require Security Context
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/severity: high
+spec:
+  validationFailureAction: enforce
+  background: true
+  rules:
+  - name: check-security-context
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+          namespaces:
+          - scrapeme
+          - scrapeme-staging
+    validate:
+      message: "Security context with runAsNonRoot and dropped capabilities is required"
+      pattern:
+        spec:
+          securityContext:
+            runAsNonRoot: true
+          containers:
+          - name: "*"
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault

@@ -1,0 +1,19 @@
+# Enterprise: Enhanced observability stack
+apiVersion: v2
+name: observability-enterprise
+description: Enterprise observability with kube-prometheus-stack, Jaeger, and custom dashboards
+version: 0.2.0
+appVersion: "1.0.0"
+dependencies:
+  - name: kube-prometheus-stack
+    version: 61.7.2
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: prometheus.enterprise
+  - name: jaeger
+    version: 3.1.0
+    repository: https://jaegertracing.github.io/helm-charts
+    condition: jaeger.enabled
+  - name: tempo
+    version: 1.7.2
+    repository: https://grafana.github.io/helm-charts
+    condition: tempo.enabled

@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: scrapeme
+  labels:
+    name: scrapeme
+    environment: production
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: scrapeme-prod
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: scrapeme
+  source:
+    repoURL: https://github.com/yonatan895/scrapeme
+    targetRevision: feat/kubernetes-orchestration
+    path: charts/scrapeme
+    helm:
+      valueFiles:
+        - deploy/environments/prod.yaml
+  syncPolicy:
+    automated: {}
+    syncOptions:
+      - CreateNamespace=true

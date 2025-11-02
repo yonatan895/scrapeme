@@ -1,0 +1,52 @@
+# Enterprise: ApplicationSet for multi-cluster deployment
+# Uncomment and configure for multi-cluster scenarios
+# apiVersion: argoproj.io/v1alpha1
+# kind: ApplicationSet
+# metadata:
+#   name: scrapeme-clusters
+#   namespace: argocd
+# spec:
+#   generators:
+#   - clusters:
+#       selector:
+#         matchLabels:
+#           env: production
+#   - clusters:
+#       selector:
+#         matchLabels:
+#           env: staging
+#   template:
+#     metadata:
+#       name: '{{name}}-scrapeme'
+#       labels:
+#         cluster: '{{name}}'
+#         environment: '{{metadata.labels.env}}'
+#     spec:
+#       project: default
+#       source:
+#         repoURL: https://github.com/yonatan895/scrapeme
+#         targetRevision: main
+#         path: charts/scrapeme
+#         helm:
+#           valueFiles:
+#           - "../../deploy/environments/{{metadata.labels.env}}.yaml"
+#           - "../../deploy/clusters/{{name}}.yaml"  # Cluster-specific overrides
+#       destination:
+#         server: '{{server}}'
+#         namespace: scrapeme-{{metadata.labels.env}}
+#       syncPolicy:
+#         automated:
+#           prune: true
+#           selfHeal: true
+#         syncOptions:
+#         - CreateNamespace=true
+#         - RespectIgnoreDifferences=true
+#       ignoreDifferences:
+#       - group: apps
+#         kind: Deployment
+#         jsonPointers:
+#         - /spec/replicas  # Ignore HPA-managed replicas
+#       - group: argoproj.io
+#         kind: Rollout
+#         jsonPointers:
+#         - /spec/replicas

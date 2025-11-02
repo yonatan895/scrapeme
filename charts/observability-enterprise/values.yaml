@@ -1,0 +1,63 @@
+# Enterprise observability stack configuration
+prometheus:
+  enterprise: true
+  # kube-prometheus-stack values
+  kube-prometheus-stack:
+    prometheus:
+      prometheusSpec:
+        retention: 30d
+        retentionSize: 50GiB
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: fast-ssd-retain
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 100Gi
+        resources:
+          requests:
+            cpu: 2000m
+            memory: 8Gi
+          limits:
+            cpu: 4000m
+            memory: 16Gi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65534
+          fsGroup: 65534
+    grafana:
+      adminPassword: "changeme-in-production"
+      persistence:
+        enabled: true
+        size: 10Gi
+        storageClassName: fast-ssd-retain
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        fsGroup: 472
+    alertmanager:
+      alertmanagerSpec:
+        storage:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: fast-ssd-retain
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 10Gi
+
+jaeger:
+  enabled: true
+  query:
+    image: jaegertracing/jaeger-query:1.51.0
+  collector:
+    image: jaegertracing/jaeger-collector:1.51.0
+  agent:
+    image: jaegertracing/jaeger-agent:1.51.0
+
+tempo:
+  enabled: false  # Alternative to Jaeger
+  tempo:
+    repository: grafana/tempo
+    tag: 2.3.0

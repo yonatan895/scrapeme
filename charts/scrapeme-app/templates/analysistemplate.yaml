@@ -1,0 +1,32 @@
+{{- if .Values.argoRollouts.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "scrapeme-app.fullname" . }}-success-rate
+  labels:
+    {{- include "scrapeme-app.labels" . | nindent 4 }}
+spec:
+  args:
+  - name: service-name
+  - name: namespace
+  metrics:
+  - name: success-rate
+    interval: 30s
+    count: 5
+    successCondition: result[0] >= 0.95
+    provider:
+      prometheus:
+        address: {{ .Values.argoRollouts.prometheus.address | default "http://prometheus:9090" }}
+        query: |
+          sum(rate(http_requests_total{service="{{.args.service-name}}",namespace="{{.args.namespace}}",code!~"5.."}[2m])) /
+          sum(rate(http_requests_total{service="{{.args.service-name}}",namespace="{{.args.namespace}}"}[2m]))
+  - name: avg-response-time
+    interval: 30s
+    count: 5
+    successCondition: result[0] <= 0.5
+    provider:
+      prometheus:
+        address: {{ .Values.argoRollouts.prometheus.address | default "http://prometheus:9090" }}
+        query: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service="{{.args.service-name}}",namespace="{{.args.namespace}}"}[2m])) by (le))
+{{- end }}

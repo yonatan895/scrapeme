@@ -1,0 +1,185 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "scrapeme-app.fullname" . }}
+  labels:
+    {{- include "scrapeme-app.labels" . | nindent 4 }}
+  annotations:
+    # Enterprise: Deployment metadata
+    deployment.kubernetes.io/revision: "{{ .Release.Revision }}"
+    meta.helm.sh/release-name: {{ .Release.Name }}
+    meta.helm.sh/release-namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "scrapeme-app.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: {{ .Values.rollingUpdate.maxUnavailable | default 1 }}
+      maxSurge: {{ .Values.rollingUpdate.maxSurge | default 1 }}
+  template:
+    metadata:
+      labels:
+        {{- include "scrapeme-app.selectorLabels" . | nindent 8 }}
+        # Enterprise: Additional labels for monitoring and policy
+        app.kubernetes.io/component: scraper
+        app.kubernetes.io/part-of: scrapeme-platform
+        version: "{{ .Values.image.tag }}"
+      annotations:
+        # Enterprise: Pod annotations for observability
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.metrics.port }}"
+        prometheus.io/path: "{{ .Values.metrics.path }}"
+        sidecar.istio.io/inject: "{{ .Values.istio.inject | default false }}"
+        backup.velero.io/backup-volumes: "artifacts,results"
+        # Enterprise: Config hash for automatic restarts on config changes
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if .Values.externalSecrets.enabled }}
+        checksum/secret: {{ include (print $.Template.BasePath "/externalsecret.yaml") . | sha256sum }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "scrapeme-app.serviceAccountName" . }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      {{- if .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.image.pullSecrets | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      # Enterprise: DNS policy for better resolution
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "2"
+        - name: edns0
+      # Enterprise: Topology spread constraints for HA
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml .Values.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      {{- end }}
+      {{- if .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.tolerations }}
+      tolerations:
+        {{- toYaml .Values.tolerations | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: app
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}{{ if .Values.image.digest }}@{{ .Values.image.digest }}{{ end }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+            {{- if .Values.service.debugPort }}
+            - name: debug
+              containerPort: {{ .Values.service.debugPort }}
+              protocol: TCP
+            {{- end }}
+            {{- if .Values.service.pprofPort }}
+            - name: pprof
+              containerPort: {{ .Values.service.pprofPort }}
+              protocol: TCP
+            {{- end }}
+          env:
+            {{- toYaml .Values.env | nindent 12 }}
+            # Enterprise: Pod metadata injection
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          {{- if .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml .Values.extraEnvFrom | nindent 12 }}
+          {{- end }}
+          args: {{- toYaml .Values.args | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: {{ .Values.config.mountPath }}
+              readOnly: true
+            - name: artifacts
+              mountPath: /app/artifacts
+            - name: results
+              mountPath: /app/results
+            {{- if .Values.extraVolumeMounts }}
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+            {{- end }}
+          # Enterprise: Enhanced health checks with startup probe
+          {{- if .Values.healthChecks.startupProbe }}
+          startupProbe:
+            {{- toYaml .Values.healthChecks.startupProbe | nindent 12 }}
+          {{- end }}
+          livenessProbe:
+            {{- if .Values.healthChecks.livenessProbe }}
+            {{- toYaml .Values.healthChecks.livenessProbe | nindent 12 }}
+            {{- else }}
+            httpGet:
+              path: /healthz
+              port: {{ .Values.metrics.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            {{- end }}
+          readinessProbe:
+            {{- if .Values.healthChecks.readinessProbe }}
+            {{- toYaml .Values.healthChecks.readinessProbe | nindent 12 }}
+            {{- else }}
+            httpGet:
+              path: /ready
+              port: {{ .Values.metrics.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            {{- end }}
+          # Enterprise: Lifecycle hooks for graceful handling
+          {{- if .Values.lifecycle }}
+          lifecycle:
+            {{- toYaml .Values.lifecycle | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      # Enterprise: Graceful termination
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds | default 60 }}
+      # Enterprise: Automatic service account token mounting control
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken | default false }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "scrapeme-app.fullname" . }}-config
+            items:
+              - key: {{ .Values.config.fileName }}
+                path: {{ .Values.config.fileName }}
+            # Enterprise: Config file permissions
+            defaultMode: 0440
+        - name: artifacts
+          persistentVolumeClaim:
+            claimName: {{ .Values.artifactsPVC.name }}
+        - name: results
+          persistentVolumeClaim:
+            claimName: {{ .Values.resultsPVC.name }}
+        {{- if .Values.extraVolumes }}
+        {{- toYaml .Values.extraVolumes | nindent 8 }}
+        {{- end }}

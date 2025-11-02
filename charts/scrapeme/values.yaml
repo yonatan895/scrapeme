@@ -1,0 +1,17 @@
+# Global defaults
+image:
+  registry: ghcr.io
+  repository: yonatan895/scrapeme
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Namespace (Argo CD can override via destination)
+namespaceOverride: ""
+
+# Subcharts enablement
+scrapeme-app:
+  enabled: true
+selenium-grid:
+  enabled: true
+observability:
+  enabled: true
