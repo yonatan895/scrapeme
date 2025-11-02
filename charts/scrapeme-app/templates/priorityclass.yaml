@@ -1,0 +1,11 @@
+{{- if .Values.priorityClassName }}
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: {{ .Values.priorityClassName }}
+  labels:
+    {{- include "scrapeme-app.labels" . | nindent 4 }}
+value: 1000
+globalDefault: false
+description: "High priority for ScrapeMe critical workloads - ensures scheduling during resource pressure"
+{{- end }}
