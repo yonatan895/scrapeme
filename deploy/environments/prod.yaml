@@ -1,0 +1,32 @@
+# Production environment values
+scrapeme-app:
+  image:
+    tag: v2.0.0
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 20
+  resources:
+    requests:
+      cpu: 1
+      memory: 2Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+  pdb:
+    minAvailable: 2
+  artifactsPVC:
+    storageClassName: ""
+  resultsPVC:
+    storageClassName: ""
+  prometheus:
+    serviceMonitor:
+      enabled: false
+selenium-grid:
+  chrome:
+    replicas: 3
+    hpa:
+      minReplicas: 3
+      maxReplicas: 12
+observability:
+  prometheus:
+    retention: 30d

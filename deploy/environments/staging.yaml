@@ -1,0 +1,27 @@
+# Staging environment values
+scrapeme-app:
+  image:
+    tag: staging
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 10
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  artifactsPVC:
+    storageClassName: ""
+  resultsPVC:
+    storageClassName: ""
+selenium-grid:
+  chrome:
+    replicas: 2
+    hpa:
+      minReplicas: 2
+      maxReplicas: 6
+observability:
+  prometheus:
+    retention: 7d
