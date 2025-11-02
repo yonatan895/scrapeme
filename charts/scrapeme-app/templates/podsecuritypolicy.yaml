@@ -1,0 +1,36 @@
+{{- if and .Values.podSecurityPolicy.enabled (not .Values.podSecurityStandards.enabled) }}
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: {{ include "scrapeme-app.fullname" . }}
+  labels:
+    {{- include "scrapeme-app.labels" . | nindent 4 }}
+spec:
+  # Enterprise: Strict security policy
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  supplementalGroups:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+  seLinux:
+    rule: 'RunAsAny'
+  # Enterprise: Resource controls
+  defaultAllowPrivilegeEscalation: false
+  forbiddenSysctls:
+    - '*'
+{{- end }}

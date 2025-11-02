@@ -1,0 +1,26 @@
+{{- if .Values.resourceQuota.enabled }}
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: {{ include "scrapeme-app.fullname" . }}-quota
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "scrapeme-app.labels" . | nindent 4 }}
+spec:
+  hard:
+    # Enterprise: Compute resource limits
+    requests.cpu: {{ .Values.resourceQuota.requests.cpu | quote }}
+    requests.memory: {{ .Values.resourceQuota.requests.memory | quote }}
+    requests.ephemeral-storage: {{ .Values.resourceQuota.requests.ephemeralStorage | quote }}
+    limits.cpu: {{ .Values.resourceQuota.limits.cpu | quote }}
+    limits.memory: {{ .Values.resourceQuota.limits.memory | quote }}
+    limits.ephemeral-storage: {{ .Values.resourceQuota.limits.ephemeralStorage | quote }}
+    # Enterprise: Object count limits
+    pods: "{{ .Values.resourceQuota.objects.pods }}"
+    persistentvolumeclaims: "{{ .Values.resourceQuota.objects.pvcs }}"
+    services: "{{ .Values.resourceQuota.objects.services }}"
+    secrets: "{{ .Values.resourceQuota.objects.secrets }}"
+    configmaps: "{{ .Values.resourceQuota.objects.configmaps }}"
+    # Enterprise: Network policy limits
+    count/networkpolicies.networking.k8s.io: "{{ .Values.resourceQuota.objects.networkpolicies }}"
+{{- end }}

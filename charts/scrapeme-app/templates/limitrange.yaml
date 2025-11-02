@@ -1,0 +1,41 @@
+{{- if .Values.limitRange.enabled }}
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: {{ include "scrapeme-app.fullname" . }}-limits
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "scrapeme-app.labels" . | nindent 4 }}
+spec:
+  limits:
+  # Enterprise: Container resource limits
+  - type: Container
+    default:
+      cpu: {{ .Values.limitRange.container.defaultLimits.cpu | quote }}
+      memory: {{ .Values.limitRange.container.defaultLimits.memory | quote }}
+      ephemeral-storage: {{ .Values.limitRange.container.defaultLimits.ephemeralStorage | quote }}
+    defaultRequest:
+      cpu: {{ .Values.limitRange.container.defaultRequests.cpu | quote }}
+      memory: {{ .Values.limitRange.container.defaultRequests.memory | quote }}
+      ephemeral-storage: {{ .Values.limitRange.container.defaultRequests.ephemeralStorage | quote }}
+    min:
+      cpu: {{ .Values.limitRange.container.min.cpu | quote }}
+      memory: {{ .Values.limitRange.container.min.memory | quote }}
+    max:
+      cpu: {{ .Values.limitRange.container.max.cpu | quote }}
+      memory: {{ .Values.limitRange.container.max.memory | quote }}
+  # Enterprise: Pod resource limits
+  - type: Pod
+    min:
+      cpu: {{ .Values.limitRange.pod.min.cpu | quote }}
+      memory: {{ .Values.limitRange.pod.min.memory | quote }}
+    max:
+      cpu: {{ .Values.limitRange.pod.max.cpu | quote }}
+      memory: {{ .Values.limitRange.pod.max.memory | quote }}
+  # Enterprise: PVC storage limits
+  - type: PersistentVolumeClaim
+    min:
+      storage: {{ .Values.limitRange.pvc.min | quote }}
+    max:
+      storage: {{ .Values.limitRange.pvc.max | quote }}
+{{- end }}

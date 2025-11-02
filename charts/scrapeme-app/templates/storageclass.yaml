@@ -1,0 +1,23 @@
+{{- if .Values.storageClass.create }}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.storageClass.name }}
+  labels:
+    {{- include "scrapeme-app.labels" . | nindent 4 }}
+  annotations:
+    # Enterprise: Storage class metadata
+    storageclass.kubernetes.io/is-default-class: "{{ .Values.storageClass.isDefault }}"
+provisioner: {{ .Values.storageClass.provisioner }}
+parameters:
+  {{- toYaml .Values.storageClass.parameters | nindent 2 }}
+reclaimPolicy: {{ .Values.storageClass.reclaimPolicy | default "Retain" }}
+volumeBindingMode: {{ .Values.storageClass.volumeBindingMode | default "WaitForFirstConsumer" }}
+{{- if .Values.storageClass.allowVolumeExpansion }}
+allowVolumeExpansion: {{ .Values.storageClass.allowVolumeExpansion }}
+{{- end }}
+{{- if .Values.storageClass.mountOptions }}
+mountOptions:
+  {{- toYaml .Values.storageClass.mountOptions | nindent 2 }}
+{{- end }}
+{{- end }}

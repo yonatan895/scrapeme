@@ -1,0 +1,49 @@
+{{- if and .Values.prometheus.serviceMonitor.enabled .Values.prometheus.serviceMonitor.operator }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "scrapeme-app.fullname" . }}
+  labels:
+    {{- include "scrapeme-app.labels" . | nindent 4 }}
+    {{- with .Values.prometheus.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "scrapeme-app.selectorLabels" . | nindent 6 }}
+  endpoints:
+  - port: metrics
+    path: {{ .Values.metrics.path }}
+    interval: {{ .Values.prometheus.serviceMonitor.interval }}
+    scrapeTimeout: {{ .Values.prometheus.serviceMonitor.scrapeTimeout }}
+    honorLabels: {{ .Values.prometheus.serviceMonitor.honorLabels }}
+    {{- if .Values.prometheus.serviceMonitor.basicAuth.enabled }}
+    basicAuth:
+      username:
+        name: {{ .Values.prometheus.serviceMonitor.basicAuth.secretName }}
+        key: username
+      password:
+        name: {{ .Values.prometheus.serviceMonitor.basicAuth.secretName }}
+        key: password
+    {{- end }}
+    {{- if .Values.prometheus.serviceMonitor.tlsConfig.enabled }}
+    tlsConfig:
+      {{- toYaml .Values.prometheus.serviceMonitor.tlsConfig.config | nindent 6 }}
+    {{- end }}
+    # Enterprise: Metric relabeling for consistent labels
+    {{- if .Values.prometheus.serviceMonitor.relabelings }}
+    relabelings:
+    {{- toYaml .Values.prometheus.serviceMonitor.relabelings | nindent 4 }}
+    {{- end }}
+    {{- if .Values.prometheus.serviceMonitor.metricRelabelings }}
+    metricRelabelings:
+    {{- toYaml .Values.prometheus.serviceMonitor.metricRelabelings | nindent 4 }}
+    {{- end }}
+  # Enterprise: Custom metrics endpoint
+  {{- if .Values.metrics.custom.enabled }}
+  - port: custom-metrics
+    path: {{ .Values.metrics.custom.path }}
+    interval: {{ .Values.prometheus.serviceMonitor.interval }}
+    {{- end }}
+{{- end }}
