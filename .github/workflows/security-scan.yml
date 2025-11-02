@@ -1,6 +1,7 @@
 name: Enterprise Security Scanning
 permissions:
   contents: read
+  security-events: write
 
 on:
   pull_request:
