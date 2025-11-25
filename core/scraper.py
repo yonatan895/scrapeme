@@ -44,6 +44,14 @@ class SiteScraper:
         *,
         artifact_dir: Path | None = None,
     ) -> None:
+        """Initializes the site scraper.
+
+        Args:
+            config: Site-specific configuration.
+            waiter: Selenium wait helper.
+            logger: Logger instance.
+            artifact_dir: Directory for artifacts (optional).
+        """
         self._config = config
         self._waiter = waiter
         self._log = logger

@@ -146,6 +146,22 @@ class BrowserManager:
         enable_pooling: bool = False,
         pool_size: int = 5,
     ) -> None:
+        """Initializes the browser manager.
+
+        Args:
+            browser: Browser type ('chrome' or 'firefox').
+            headless: Run in headless mode.
+            incognito: Run in incognito mode.
+            page_load_timeout_sec: Page load timeout.
+            download_dir: Directory for downloads.
+            proxy: Proxy server address.
+            chromedriver_path: Path to chromedriver.
+            geckodriver_path: Path to geckodriver.
+            remote_url: URL of remote WebDriver.
+            chrome_binary: Path to Chrome binary.
+            enable_pooling: Enable WebDriver pooling.
+            pool_size: Size of the WebDriver pool.
+        """
         self._browser = Browser(browser)
         self._headless = headless
         self._incognito = incognito
