@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "scrapeme.fullname" . }}-config
+  labels:
+    {{- include "scrapeme.labels" . | nindent 4 }}
+data:
+  sites.yaml: |
+    {{- .Values.config.sites | nindent 4 }}

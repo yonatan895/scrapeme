@@ -1,0 +1,115 @@
+# Default values for scrapeme.
+
+image:
+  repository: ghcr.io/yonatan895/scrapeme
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 9090
+  metricsPort: 9090
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+resources: {}
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+# Application Configuration
+config:
+  # If defined, overrides the sites.yaml content
+  sites: |
+    sites:
+      - name: example
+        base_url: "https://example.com"
+        wait_timeout_sec: 20
+        page_load_timeout_sec: 30
+        steps:
+          - name: homepage
+            goto_url: "https://example.com"
+            wait_xpath: "//h1"
+            fields:
+              - name: title
+                xpath: "//h1"
+
+  # Secrets (env vars)
+  env:
+    # SITE_USERNAME: "myuser"
+    # SITE_PASSWORD: "mypassword"
+
+# Execution Mode
+mode: "deployment" # Options: "deployment" (loop), "cronjob" (scheduled)
+
+# Deployment Config (if mode == "deployment")
+deployment:
+  replicaCount: 1
+  loopInterval: 300 # Seconds
+
+# CronJob Config (if mode == "cronjob")
+cronjob:
+  schedule: "*/10 * * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+
+# Selenium Grid Integration
+selenium:
+  # URL to external Selenium Grid (e.g., http://selenium-hub:4444)
+  # If selenium-grid.enabled is true, this is automatically set to local service
+  hubUrl: ""
+
+selenium-grid:
+  enabled: true
+  # Configure subchart values here if needed
+  # https://github.com/SeleniumHQ/docker-selenium/tree/trunk/charts/selenium-grid
+
+monitoring:
+  serviceMonitor:
+    enabled: false
+    # namespace: monitoring
+    # labels: {}

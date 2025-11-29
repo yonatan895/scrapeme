@@ -1,0 +1,92 @@
+{{- if eq .Values.mode "deployment" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "scrapeme.fullname" . }}
+  labels:
+    {{- include "scrapeme.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.deployment.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "scrapeme.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "scrapeme.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "scrapeme.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "runner.py"]
+          args:
+            - "--config"
+            - "/app/config/sites.yaml"
+            - "--loop-interval"
+            - "{{ .Values.deployment.loopInterval }}"
+            - "--metrics-port"
+            - "{{ .Values.service.metricsPort }}"
+            - "--json-logs"
+            {{- if or .Values.selenium.hubUrl .Values.selenium-grid.enabled }}
+            - "--remote-url"
+            - "{{ if .Values.selenium.hubUrl }}{{ .Values.selenium.hubUrl }}{{ else }}http://{{ .Release.Name }}-selenium-grid-hub:4444{{ end }}"
+            {{- else }}
+            - "--headless"
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ include "scrapeme.fullname" . }}-secrets
+          ports:
+            - name: http-metrics
+              containerPort: {{ .Values.service.metricsPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http-metrics
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http-metrics
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/sites.yaml
+              subPath: sites.yaml
+              readOnly: true
+            - name: artifacts
+              mountPath: /app/artifacts
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "scrapeme.fullname" . }}-config
+        - name: artifacts
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
