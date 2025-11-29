@@ -210,6 +210,8 @@ class BrowserManager:
         opts.add_argument("--disable-extensions")
         opts.add_argument("--disable-blink-features=AutomationControlled")
         opts.add_argument("--disable-features=VizDisplayCompositor")
+        opts.add_argument("--blink-settings=imagesEnabled=false")
+        opts.set_capability("pageLoadStrategy", "eager")
 
         opts.set_capability("acceptInsecureCerts", True)
         opts.add_argument("--ignore-certificate-errors")

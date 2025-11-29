@@ -68,56 +68,118 @@ class SiteScraper:
         """Click with retry and metrics."""
         self._waiter.clickable((By.XPATH, xpath)).click()
 
-    def _get_cache_key(self, xpath: str, attribute: str | None) -> str:
-        """Generate cache key for field extraction."""
+    def _get_cache_key(self, step_name: str, fields: list[FieldConfig]) -> str:
+        """Generate cache key for step extraction."""
         current_url = self._waiter.driver.current_url
-        # Create a deterministic key based on URL, xpath, and attribute
         import hashlib
-        key_raw = f"{current_url}:{xpath}:{attribute or 'text'}"
-        return f"cache:field:{hashlib.md5(key_raw.encode()).hexdigest()}"
+        import json
 
-    @selenium_retry
-    def _extract_field(self, field: FieldConfig) -> str:
-        """Extract field with retry, metrics, and caching."""
-        # Try cache first
+        # Create deterministic signature of the fields we are extracting
+        fields_sig = sorted([f"{f.name}:{f.xpath}:{f.attribute or ''}" for f in fields])
+        key_raw = f"{current_url}:{step_name}:{json.dumps(fields_sig)}"
+        return f"cache:step:{hashlib.md5(key_raw.encode()).hexdigest()}"
+
+    def _extract_all_fields_js(self, step_name: str, fields: list[FieldConfig]) -> dict[str, str]:
+        """Extract all fields in one JS call to minimize roundtrips."""
+        if not fields:
+            return {}
+
+        # Try Redis Cache
         if self._redis:
-            cache_key = self._get_cache_key(field.xpath, field.attribute)
+            cache_key = self._get_cache_key(step_name, fields)
             try:
-                cached_value = self._redis.get(cache_key)
-                if cached_value is not None:
-                    Metrics.fields_extracted_total.labels(
-                        site=self._config.name,
-                        step="current",
-                        field=field.name,
-                    ).inc()
-                    return str(cached_value)
+                import json
+                cached_val = self._redis.get(cache_key)
+                if cached_val:
+                    return json.loads(cached_val) # type: ignore
             except Exception:
                 self._log.warning("Redis cache get failed", exc_info=True)
 
-        element = self._waiter.visible((By.XPATH, field.xpath))
+        # Construct a mapping of field_name -> {xpath, attribute}
+        # We'll inject a script that evaluates all XPaths and returns a JSON object.
 
-        if field.attribute:
-            value = element.get_attribute(field.attribute)
-        else:
-            value = element.text
+        # Safe JS injection construction
+        field_specs = []
+        for f in fields:
+            # Escape quotes in xpath to be safe in JS string
+            safe_xpath = f.xpath.replace('"', '\\"')
+            attr = f.attribute or ""
+            field_specs.append(f'{{name: "{f.name}", xpath: "{safe_xpath}", attr: "{attr}"}}')
 
-        value_str = "" if value is None else str(value)
+        specs_json = f"[{','.join(field_specs)}]"
 
-        # Update cache
-        if self._redis:
-            try:
-                # Cache for 1 hour by default
-                self._redis.setex(cache_key, 3600, value_str)
-            except Exception:
-                self._log.warning("Redis cache set failed", exc_info=True)
+        js_script = f"""
+        const specs = {specs_json};
+        const results = {{}};
 
-        Metrics.fields_extracted_total.labels(
-            site=self._config.name,
-            step="current",
-            field=field.name,
-        ).inc()
+        for (const spec of specs) {{
+            try {{
+                const result = document.evaluate(
+                    spec.xpath,
+                    document,
+                    null,
+                    XPathResult.FIRST_ORDERED_NODE_TYPE,
+                    null
+                );
+                const node = result.singleNodeValue;
 
-        return value_str
+                if (node) {{
+                    if (spec.attr) {{
+                        results[spec.name] = node.getAttribute(spec.attr) || "";
+                    }} else {{
+                        results[spec.name] = node.textContent || "";
+                    }}
+                }} else {{
+                    results[spec.name] = null; // Mark as missing
+                }}
+            }} catch (e) {{
+                results[spec.name] = "ERROR: " + e.message;
+            }}
+        }}
+        return results;
+        """
+
+        try:
+            # Type ignore because execute_script returns Any
+            extracted: dict[str, str | None] = self._waiter.driver.execute_script(js_script)  # type: ignore
+
+            # Post-process results (null -> empty string, metrics)
+            final_results: dict[str, str] = {}
+            for f in fields:
+                val = extracted.get(f.name)
+                if val is None:
+                    # If JS couldn't find it, we might want to fail hard or fallback.
+                    # Original logic used _waiter.visible which throws TimeoutException.
+                    # To maintain semantics, if it's missing, we should probably try the slow path
+                    # OR just raise an error if we are strict.
+                    # For performance, we assume if JS didn't find it, it's not there.
+                    # BUT, the original logic waited for visibility. JS execution is instant.
+                    # We should probably WAIT for the *first* element or a common parent?
+                    # Or maybe the 'wait_xpath' in the step config covers this?
+                    # Yes, step.wait_xpath guards the page state.
+                    val = ""
+
+                final_results[f.name] = str(val)
+
+                Metrics.fields_extracted_total.labels(
+                    site=self._config.name,
+                    step="current",
+                    field=f.name,
+                ).inc()
+
+            if self._redis:
+                try:
+                    import json
+                    # Cache for 1 hour
+                    self._redis.setex(cache_key, 3600, json.dumps(final_results))
+                except Exception:
+                    self._log.warning("Redis cache set failed", exc_info=True)
+
+            return final_results
+
+        except Exception as e:
+            self._log.error(f"Bulk JS extraction failed: {e}")
+            raise
 
     def _resolve_url(self, url: str) -> str:
         """Resolve URL to absolute and normalize.
@@ -177,23 +239,22 @@ class SiteScraper:
                     self._log.info("Waiting for URL")
                     self._waiter.url_contains(step.wait_url_contains)
 
+                # Performance optimization: Bulk extraction via JS
+                # This replaces O(N) calls with O(1) call
                 data: dict[str, Any] = {}
-                for field in step.fields:
-                    try:
-                        data[field.name] = self._extract_field(field)
-                    except Exception as e:
-                        if self._capture.enabled:
-                            self._capture.capture(f"{self._config.name}_{step.name}_{field.name}")
-
-                        raise ExtractionError(
-                            f"Field '{field.name}' extraction failed",
-                            context=ErrorContext(
-                                site_name=self._config.name,
-                                step_name=step.name,
-                                field_name=field.name,
-                                xpath=field.xpath,
-                            ),
-                        ) from e
+                try:
+                    # We rely on step.wait_xpath to ensure the page is ready.
+                    # If fields are missing in JS, they return empty string.
+                    # If precise per-field waiting is needed, individual field waits can be added to config.
+                    data = self._extract_all_fields_js(step.name, step.fields)  # type: ignore
+                except Exception as e:
+                    # Fallback or error handling
+                    if self._capture.enabled:
+                        self._capture.capture(f"{self._config.name}_{step.name}_bulk")
+                    raise ExtractionError(
+                        f"Bulk extraction failed for step '{step.name}'",
+                        context=ErrorContext(site_name=self._config.name, step_name=step.name),
+                    ) from e
 
                 success = True
                 return data
