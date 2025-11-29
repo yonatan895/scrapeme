@@ -9,10 +9,10 @@ import redis
 
 __all__ = ["get_redis_client"]
 
-_client: redis.Redis | None = None
+_client: redis.Redis[str] | None = None
 
 
-def get_redis_client() -> redis.Redis | None:
+def get_redis_client() -> redis.Redis[str] | None:
     """Get or create global Redis client.
 
     Returns:
