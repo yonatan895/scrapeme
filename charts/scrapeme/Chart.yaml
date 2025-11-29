@@ -17,3 +17,7 @@ dependencies:
     version: 26.0.0
     repository: https://charts.bitnami.com/bitnami
     condition: kafka.enabled
+  - name: selenium-grid
+    version: 0.2.0
+    repository: https://seleniumhq.github.io/docker-selenium/
+    condition: selenium-grid.enabled

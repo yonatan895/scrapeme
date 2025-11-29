@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any, cast
 
-import os
 import structlog
 from structlog.typing import EventDict, WrappedLogger
+
 from infra.logging_db import PostgresHandler
 
 __all__ = ["configure_logging"]

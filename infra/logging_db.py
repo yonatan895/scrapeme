@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+
 from infra.db import save_log
+
 
 class PostgresHandler(logging.Handler):
     """Logging handler that writes to Postgres."""

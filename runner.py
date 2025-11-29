@@ -21,9 +21,9 @@ from core.secrets import EnvSecrets
 from core.serialization import dumps as fast_dumps
 from core.serialization import to_jsonable
 from core.waits import Waiter
-from infra.db import init_db, save_result, close_db
+from infra.db import close_db, init_db, save_result
 from infra.health import HealthRegistry, HealthStatus
-from infra.kafka import send_result, close_producer
+from infra.kafka import close_producer, send_result
 from infra.logging_config import configure_logging
 from infra.server import HealthServer
 from infra.signals import register_shutdown_handler, setup_signal_handlers, shutdown_event
