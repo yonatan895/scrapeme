@@ -173,8 +173,17 @@ def main() -> int:
         action="store_true",
         help="Run as daemon with health checks (for Kubernetes deployment)",
     )
+    parser.add_argument(
+        "--loop-interval",
+        type=int,
+        metavar="SECONDS",
+        help="Run in a loop with specified interval (seconds). Implies --daemon.",
+    )
 
     args = parser.parse_args()
+
+    if args.loop_interval is not None and args.loop_interval < 0:
+        parser.error("Loop interval must be non-negative")
 
     setup_signal_handlers()
     logger = configure_logging(args.log_level, args.log_file, args.json_logs)
@@ -220,7 +229,7 @@ def main() -> int:
     )
 
     # Daemon mode for Kubernetes deployment
-    if args.daemon:
+    if args.daemon and not args.loop_interval:
         logger.info("Running in daemon mode - waiting for shutdown signal")
         try:
             # Keep the process alive for health checks
@@ -232,6 +241,29 @@ def main() -> int:
             health_server.stop()
         return 0
 
+    # Loop mode
+    while True:
+        _run_once(args, logger, sites, artifact_dir)
+
+        if args.loop_interval is None:
+            break
+
+        logger.info(f"Sleeping for {args.loop_interval} seconds...")
+        if shutdown_event.wait(timeout=args.loop_interval):
+            logger.info("Shutdown signal received during sleep")
+            break
+
+    health_server.stop()
+    return 0
+
+
+def _run_once(
+    args: argparse.Namespace,
+    logger: logging.Logger | Any,
+    sites: tuple[SiteConfig, ...],
+    artifact_dir: Path | None,
+) -> int:
+    """Run a single pass of scraping."""
     results: list[dict[str, Any]] = []
     max_workers = min(args.max_workers, max(1, len(sites)))
 
@@ -239,7 +271,12 @@ def main() -> int:
         if args.jsonl:
             # Stream JSON lines as results become available
             try:
-                with args.out.open("wb") as fp:
+                # Use append mode if looping, but overwrite on first run?
+                # Actually, for loop mode, JSONL is great (append).
+                # But for standard mode, we overwrite.
+                mode = "ab" if args.loop_interval is not None else "wb"
+
+                with args.out.open(mode) as fp:
                     with ThreadPoolExecutor(max_workers=max_workers) as executor:
                         futures = {
                             executor.submit(
@@ -282,6 +319,8 @@ def main() -> int:
             return 0
 
         # Default: collect in-memory and dump once (compact by default)
+        # Note: In loop mode, this will overwrite the file every iteration.
+        # This is expected for "current state" files.
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(
@@ -325,8 +364,9 @@ def main() -> int:
             logger.exception("Failed to write results")
             return 1
 
-    finally:
-        health_server.stop()
+    except Exception:
+        logger.exception("Unexpected error during scraping pass")
+        return 1
 
     return 0
 

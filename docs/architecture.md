@@ -1,17 +1,58 @@
 # Architecture Overview
 
-## High level
-- runner.py orchestrates scraping across sites with a thread pool.
-- Browsers are managed by core/browser.BrowserManager with optional pooling.
-- Each site is represented by config.models.SiteConfig loaded via config.loader.
-- Scraping logic lives in core/scraper.SiteScraper, using core/waits and Selenium.
-- Errors are structured (core/exceptions) and can attach artifacts (core/capture).
-- Observability via core/metrics + infra/server for health endpoints.
+## High Level Flow
 
-## Error handling & resilience
-- Circuit breakers per-site (core/circuit_breaker) to back off failing targets.
-- Structured error payloads with contextual fields and optional artifacts.
+1.  **Entry Point (`runner.py`)**:
+    -   Parses CLI arguments.
+    -   Loads and validates configuration (`config/loader`).
+    -   Starts the Health Server (`infra/server`).
+    -   Initializes the `ThreadPoolExecutor`.
 
-## Logging
-- infra/logging_config sets JSON or human-readable logs.
-- Signals and graceful shutdown via infra/signals.
+2.  **Execution (`process_site`)**:
+    -   Checks **Circuit Breaker** status for the site.
+    -   Instantiates `BrowserManager` to obtain a WebDriver.
+    -   Performs **Authentication** (if configured) via `core/auth`.
+    -   Executes scraping steps via `core/scraper`.
+    -   Records metrics (success/failure, duration).
+
+3.  **Core Components**:
+    -   **Scraping**: `core/scraper.SiteScraper` manages the flow of steps, frame switching, and data extraction.
+    -   **Waiting**: `core/waits.Waiter` handles smart explicit waits for elements and states.
+    -   **Artifacts**: `core/capture` saves screenshots and HTML when errors occur.
+
+## Browser Management
+
+Browsers are managed by `core/browser.BrowserManager`.
+
+-   **Drivers**: Supports Chrome and Firefox.
+-   **Pooling**: Optional `WebDriverPool` reuses browser sessions between sites to reduce startup overhead. Enable with `--enable-pooling`.
+-   **Chrome Options**:
+    -   Production-ready defaults: `--disable-dev-shm-usage`, `--disable-gpu`, `--no-sandbox`.
+    -   Automation hiding: `--disable-blink-features=AutomationControlled`.
+    -   Security: `acceptInsecureCerts`, `--ignore-certificate-errors`.
+
+## Error Handling & Resilience
+
+### Circuit Breakers
+Implemented in `core/circuit_breaker` to prevent cascading failures and overloading target sites.
+
+-   **Scope**: Per-site.
+-   **States**: `CLOSED` (Normal), `OPEN` (Failing, requests rejected), `HALF_OPEN` (Testing recovery).
+-   **Defaults**:
+    -   **Failure Threshold**: 5 consecutive failures triggers `OPEN`.
+    -   **Recovery Timeout**: 60 seconds before trying `HALF_OPEN`.
+    -   **Success Threshold**: 2 successful requests in `HALF_OPEN` resets to `CLOSED`.
+
+### Artifact Capture
+On failure, the system captures:
+-   **Screenshot**: PNG image of the browser state.
+-   **HTML**: Full page source.
+-   **Context**: URL, step name, and timestamp.
+
+## Directory Structure
+
+-   `core/`: Business logic (scraping, browser, auth, metrics).
+-   `config/`: Configuration models and validation.
+-   `infra/`: Infrastructure concerns (logging, health, signals).
+-   `tests/`: Unit, integration, and load tests.
+-   `docs/`: Project documentation.

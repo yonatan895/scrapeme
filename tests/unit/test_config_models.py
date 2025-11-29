@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from config.models import FieldConfig, FrameSpec, LoginConfig, SiteConfig, StepBlock
 
@@ -24,12 +25,12 @@ class TestFieldConfig:
 
     def test_empty_name_raises(self):
         """Test empty field name raises error."""
-        with pytest.raises(ValueError, match="name cannot be empty"):
+        with pytest.raises(ValidationError):
             FieldConfig(name="", xpath="//div")
 
     def test_empty_xpath_raises(self):
         """Test empty xpath raises error."""
-        with pytest.raises(ValueError, match="xpath cannot be empty"):
+        with pytest.raises(ValidationError):
             FieldConfig(name="test", xpath="")
 
 
@@ -58,17 +59,17 @@ class TestFrameSpec:
 
     def test_no_selector_raises(self):
         """Test no selector raises error."""
-        with pytest.raises(ValueError, match="at least one selector"):
+        with pytest.raises(ValidationError, match="requires at least one selector"):
             FrameSpec()
 
     def test_multiple_selectors_raises(self):
         """Test multiple selectors raises error."""
-        with pytest.raises(ValueError, match="exactly one selector"):
+        with pytest.raises(ValidationError, match="requires exactly one selector"):
             FrameSpec(xpath="//iframe", css="iframe")
 
     def test_negative_index_raises(self):
         """Test negative index raises error."""
-        with pytest.raises(ValueError, match="non-negative"):
+        with pytest.raises(ValidationError):
             FrameSpec(index=-1)
 
 
@@ -83,7 +84,7 @@ class TestStepBlock:
 
     def test_empty_name_raises(self):
         """Test empty step name raises error."""
-        with pytest.raises(ValueError, match="name cannot be empty"):
+        with pytest.raises(ValidationError):
             StepBlock(name="")
 
     def test_duplicate_field_names_raises(self):
@@ -91,12 +92,12 @@ class TestStepBlock:
         field1 = FieldConfig(name="title", xpath="//h1")
         field2 = FieldConfig(name="title", xpath="//h2")
 
-        with pytest.raises(ValueError, match="Duplicate field names"):
+        with pytest.raises(ValidationError, match="Duplicate field names"):
             StepBlock(name="test", fields=(field1, field2))
 
     def test_invalid_frame_exit_raises(self):
         """Test invalid frame_exit raises error."""
-        with pytest.raises(ValueError, match="Invalid frame_exit"):
+        with pytest.raises(ValidationError):
             StepBlock(name="test", frame_exit="invalid")  # type: ignore
 
 
@@ -115,12 +116,12 @@ class TestSiteConfig:
 
     def test_empty_name_raises(self):
         """Test empty site name raises error."""
-        with pytest.raises(ValueError, match="name cannot be empty"):
+        with pytest.raises(ValidationError):
             SiteConfig(name="", base_url="https://example.com")
 
     def test_negative_timeout_raises(self):
         """Test negative timeout raises error."""
-        with pytest.raises(ValueError, match="must be positive"):
+        with pytest.raises(ValidationError):
             SiteConfig(
                 name="test",
                 base_url="https://example.com",
@@ -132,7 +133,7 @@ class TestSiteConfig:
         step1 = StepBlock(name="test", fields=())
         step2 = StepBlock(name="test", fields=())
 
-        with pytest.raises(ValueError, match="Duplicate step names"):
+        with pytest.raises(ValidationError, match="Duplicate step names"):
             SiteConfig(
                 name="site",
                 base_url="https://example.com",
