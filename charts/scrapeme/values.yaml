@@ -113,3 +113,25 @@ monitoring:
     enabled: false
     # namespace: monitoring
     # labels: {}
+
+# Infrastructure Dependencies
+postgresql:
+  enabled: true
+  auth:
+    database: scrapeme
+    username: scrapeme
+    # password: set-in-secrets-or-default
+
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+
+kafka:
+  enabled: true
+  provisioning:
+    topics:
+      - name: scraped_data
+        partitions: 1
+        replicationFactor: 1

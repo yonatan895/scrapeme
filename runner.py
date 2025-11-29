@@ -21,7 +21,9 @@ from core.secrets import EnvSecrets
 from core.serialization import dumps as fast_dumps
 from core.serialization import to_jsonable
 from core.waits import Waiter
+from infra.db import close_db, init_db, save_result
 from infra.health import HealthRegistry, HealthStatus
+from infra.kafka import close_producer, send_result
 from infra.logging_config import configure_logging
 from infra.server import HealthServer
 from infra.signals import register_shutdown_handler, setup_signal_handlers, shutdown_event
@@ -134,7 +136,12 @@ def process_site(
             Metrics.record_scrape_success(site.name, duration)
             circuit_breaker.record_success()
 
-            return {"site": site.name, "data": data}
+            # Persist results
+            result_data = {"site": site.name, "data": data}
+            save_result(site.name, result_data)
+            send_result(site.name, result_data)
+
+            return result_data
 
     except Exception as e:
         duration = time.monotonic() - start_time
@@ -188,6 +195,9 @@ def main() -> int:
     setup_signal_handlers()
     logger = configure_logging(args.log_level, args.log_file, args.json_logs)
 
+    # Initialize DB
+    init_db()
+
     # Start health server for Kubernetes health checks and metrics
     health_server = HealthServer(port=args.metrics_port)
     health_server.start()
@@ -239,21 +249,27 @@ def main() -> int:
             logger.info("Interrupted by user")
         finally:
             health_server.stop()
+            close_producer()
+            close_db()
         return 0
 
     # Loop mode
-    while True:
-        _run_once(args, logger, sites, artifact_dir)
+    try:
+        while True:
+            _run_once(args, logger, sites, artifact_dir)
 
-        if args.loop_interval is None:
-            break
+            if args.loop_interval is None:
+                break
 
-        logger.info(f"Sleeping for {args.loop_interval} seconds...")
-        if shutdown_event.wait(timeout=args.loop_interval):
-            logger.info("Shutdown signal received during sleep")
-            break
+            logger.info(f"Sleeping for {args.loop_interval} seconds...")
+            if shutdown_event.wait(timeout=args.loop_interval):
+                logger.info("Shutdown signal received during sleep")
+                break
+    finally:
+        health_server.stop()
+        close_producer()
+        close_db()
 
-    health_server.stop()
     return 0
 
 

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any, cast
 
 import structlog
 from structlog.typing import EventDict, WrappedLogger
+
+from infra.logging_db import PostgresHandler
 
 __all__ = ["configure_logging"]
 
@@ -32,6 +35,9 @@ def configure_logging(
 
     if log_file:
         handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
+
+    if os.getenv("POSTGRES_DSN"):
+        handlers.append(PostgresHandler())
 
     logging.basicConfig(
         format="%(message)s",

@@ -30,6 +30,9 @@ dependencies = [
     "lxml>=6.0.2",
     "orjson>=3.9.0",  # High-performance JSON encoder/decoder for all clients
     "pydantic>=2.0.0",
+    "kafka-python>=2.0.2",
+    "redis>=5.0.1",
+    "psycopg2-binary>=2.9.9",
 ]
 
 # Optional dependency groups
@@ -67,6 +70,8 @@ lint = [
     "mypy>=1.18.2",
     "pylint>=4.0.2",
     "types-PyYAML>=6.0.0",
+    "types-redis>=4.6.0.0",
+    "types-psycopg2>=2.9.0",
 ]
 
 # Security scanning
@@ -153,6 +158,10 @@ show_error_codes = true
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = "kafka.*"
+ignore_missing_imports = true
 
 # pylint configuration
 [tool.pylint.main]

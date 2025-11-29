@@ -19,6 +19,7 @@ from core.rate_limiter import RateLimiter, TokenBucket
 from core.retry import selenium_retry
 from core.url import is_absolute_url, make_absolute_url, normalize_url
 from core.waits import Waiter
+from infra.cache import get_redis_client
 
 __all__ = ["SiteScraper"]
 
@@ -34,6 +35,7 @@ class SiteScraper:
         "_capture",
         "_rate_limiter",
         "_circuit_breaker",
+        "_redis",
     )
 
     def __init__(
@@ -59,15 +61,39 @@ class SiteScraper:
         self._rate_limiter: TokenBucket = RateLimiter.get(
             self._config.name, requests_per_second=2.0
         )
+        self._redis = get_redis_client()
 
     @selenium_retry
     def _safe_click(self, xpath: str) -> None:
         """Click with retry and metrics."""
         self._waiter.clickable((By.XPATH, xpath)).click()
 
+    def _get_cache_key(self, xpath: str, attribute: str | None) -> str:
+        """Generate cache key for field extraction."""
+        current_url = self._waiter.driver.current_url
+        # Create a deterministic key based on URL, xpath, and attribute
+        import hashlib
+        key_raw = f"{current_url}:{xpath}:{attribute or 'text'}"
+        return f"cache:field:{hashlib.md5(key_raw.encode()).hexdigest()}"
+
     @selenium_retry
     def _extract_field(self, field: FieldConfig) -> str:
-        """Extract field with retry and metrics."""
+        """Extract field with retry, metrics, and caching."""
+        # Try cache first
+        if self._redis:
+            cache_key = self._get_cache_key(field.xpath, field.attribute)
+            try:
+                cached_value = self._redis.get(cache_key)
+                if cached_value is not None:
+                    Metrics.fields_extracted_total.labels(
+                        site=self._config.name,
+                        step="current",
+                        field=field.name,
+                    ).inc()
+                    return str(cached_value)
+            except Exception:
+                self._log.warning("Redis cache get failed", exc_info=True)
+
         element = self._waiter.visible((By.XPATH, field.xpath))
 
         if field.attribute:
@@ -75,13 +101,23 @@ class SiteScraper:
         else:
             value = element.text
 
+        value_str = "" if value is None else str(value)
+
+        # Update cache
+        if self._redis:
+            try:
+                # Cache for 1 hour by default
+                self._redis.setex(cache_key, 3600, value_str)
+            except Exception:
+                self._log.warning("Redis cache set failed", exc_info=True)
+
         Metrics.fields_extracted_total.labels(
             site=self._config.name,
             step="current",
             field=field.name,
         ).inc()
 
-        return "" if value is None else str(value)
+        return value_str
 
     def _resolve_url(self, url: str) -> str:
         """Resolve URL to absolute and normalize.
