@@ -1,0 +1,81 @@
+{{- if eq .Values.mode "cronjob" }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "scrapeme.fullname" . }}
+  labels:
+    {{- include "scrapeme.labels" . | nindent 4 }}
+spec:
+  schedule: "{{ .Values.cronjob.schedule }}"
+  successfulJobsHistoryLimit: {{ .Values.cronjob.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.cronjob.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          {{- with .Values.podAnnotations }}
+          annotations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          labels:
+            {{- include "scrapeme.selectorLabels" . | nindent 12 }}
+        spec:
+          restartPolicy: OnFailure
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          serviceAccountName: {{ include "scrapeme.serviceAccountName" . }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: {{ .Chart.Name }}
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["python", "runner.py"]
+              args:
+                - "--config"
+                - "/app/config/sites.yaml"
+                # No loop interval, run once
+                - "--metrics-port"
+                - "{{ .Values.service.metricsPort }}"
+                - "--json-logs"
+                {{- if or .Values.selenium.hubUrl .Values.selenium-grid.enabled }}
+                - "--remote-url"
+                - "{{ if .Values.selenium.hubUrl }}{{ .Values.selenium.hubUrl }}{{ else }}http://{{ .Release.Name }}-selenium-grid-hub:4444{{ end }}"
+                {{- else }}
+                - "--headless"
+                {{- end }}
+              envFrom:
+                - secretRef:
+                    name: {{ include "scrapeme.fullname" . }}-secrets
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: config
+                  mountPath: /app/config/sites.yaml
+                  subPath: sites.yaml
+                  readOnly: true
+                - name: artifacts
+                  mountPath: /app/artifacts
+          volumes:
+            - name: config
+              configMap:
+                name: {{ include "scrapeme.fullname" . }}-config
+            - name: artifacts
+              emptyDir: {}
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}
