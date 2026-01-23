@@ -68,6 +68,8 @@ make format lint type-check test
 
 # Run specific test suites
 make test-unit test-integration test-load
+make helm-test     # Validate Helm charts
+
 
 # Load testing
 make load-run

@@ -4,6 +4,7 @@
         docker-build docker-build-dev docker-test docker-push docker-run docker-scan docker-prepare docker-shell docker-clean \
         docs serve-docs docs-clean compose-up compose-down compose-logs compose-ps compose-restart compose-clean \
         k8s-deploy k8s-delete k8s-logs k8s-status k8s-describe k8s-shell k8s-port-forward k8s-restart \
+        helm-lint helm-template helm-deps helm-package helm-test helm-install helm-upgrade helm-uninstall \
         ci-local pre-commit-install pre-commit-run pre-commit-update quickstart dev check fix watch version version-bump git-tag \
         info deps-tree deps-outdated health-check diagnose load-run verify-python \
         load-test-health load-test-stress load-test-mixed load-test-fast load-test-external load-test-ci load-test-production \
@@ -440,6 +441,64 @@ compose-restart: ## Restart compose services
 
 compose-clean: ## Remove stopped containers and dangling resources
 	$(DOCKER_COMPOSE) -f docker-compose.production.yaml down --remove-orphans
+
+# --- Helm Charts ---
+
+HELM := helm
+CHART_PATH := charts/scrapeme
+CHART_NAME := scrapeme
+HELM_NAMESPACE ?= scrapeme
+
+helm-lint: ## Lint Helm chart
+	@echo "$(BLUE)Linting Helm chart...$(NC)"
+	$(HELM) lint $(CHART_PATH)
+	@echo "$(GREEN)Helm lint passed$(NC)"
+
+helm-template: ## Render Helm templates locally
+	@echo "$(BLUE)Rendering Helm templates...$(NC)"
+	$(HELM) template $(CHART_NAME) $(CHART_PATH) --debug
+
+helm-deps: ## Update Helm chart dependencies
+	@echo "$(BLUE)Updating Helm dependencies...$(NC)"
+	$(HELM) dependency update $(CHART_PATH)
+	@echo "$(GREEN)Helm dependencies updated$(NC)"
+
+helm-package: ## Package Helm chart
+	@echo "$(BLUE)Packaging Helm chart...$(NC)"
+	$(HELM) package $(CHART_PATH) -d artifacts/
+	@echo "$(GREEN)Helm chart packaged to artifacts/$(NC)"
+
+helm-install: helm-deps ## Install Helm chart to cluster
+	@echo "$(BLUE)Installing Helm chart...$(NC)"
+	$(HELM) install $(CHART_NAME) $(CHART_PATH) \
+		--namespace $(HELM_NAMESPACE) \
+		--create-namespace \
+		--wait
+	@echo "$(GREEN)Helm chart installed$(NC)"
+
+helm-upgrade: helm-deps ## Upgrade Helm release
+	@echo "$(BLUE)Upgrading Helm release...$(NC)"
+	$(HELM) upgrade $(CHART_NAME) $(CHART_PATH) \
+		--namespace $(HELM_NAMESPACE) \
+		--wait
+	@echo "$(GREEN)Helm release upgraded$(NC)"
+
+helm-uninstall: ## Uninstall Helm release
+	@echo "$(YELLOW)Uninstalling Helm release...$(NC)"
+	$(HELM) uninstall $(CHART_NAME) --namespace $(HELM_NAMESPACE) || true
+	@echo "$(GREEN)Helm release uninstalled$(NC)"
+
+helm-test: venv ## Run Helm chart validation tests
+	@echo "$(BLUE)Running Helm chart tests...$(NC)"
+	@if [ ! -x "$(PYTEST)" ]; then $(UV) pip install -e ".[dev]"; fi
+	$(PYTEST) tests/helm -v
+	@echo "$(GREEN)Helm chart tests passed$(NC)"
+
+helm-status: ## Show Helm release status
+	$(HELM) status $(CHART_NAME) --namespace $(HELM_NAMESPACE)
+
+helm-values: ## Show computed Helm values
+	$(HELM) get values $(CHART_NAME) --namespace $(HELM_NAMESPACE)
 
 # --- Documentation ---
 

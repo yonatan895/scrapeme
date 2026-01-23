@@ -4,7 +4,8 @@
 - core/    — browser/session management, scraping, waits, metrics
 - config/  — typed config models and loader
 - infra/   — logging, signal handling, health server
-- tests/   — unit/integration/e2e structure (markers supported)
+- tests/   — unit/integration/e2e tests + helm chart validation
+
 
 ## Environment
 ```bash
