@@ -43,8 +43,10 @@ COPY core core
 COPY config config
 COPY infra infra
 COPY runner.py runner.py
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 USER appuser
-ENTRYPOINT ["python", "runner.py"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
 
 ############################
 # Development image

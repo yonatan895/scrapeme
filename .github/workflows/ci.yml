@@ -55,8 +55,8 @@ jobs:
       - name: mypy (strict)
         run: mypy core/ config/ infra/ runner.py --explicit-package-bases --strict --show-error-codes
 
-      - name: Unit tests only (fast)
-        run: pytest -q -m "unit or not integration and not e2e" --cov=core --cov=config --cov=infra --cov-report=xml --cov-fail-under=0
+      - name: Unit, Property, and Helm tests (fast)
+        run: pytest tests/unit tests/property tests/helm -q --cov=core --cov=config --cov=infra --cov-report=xml --cov-fail-under=0
 
       - name: Upload coverage (XML)
         uses: actions/upload-artifact@v4
@@ -64,6 +64,54 @@ jobs:
           name: coverage-xml
           path: coverage.xml
           if-no-files-found: ignore
+
+  # ------------------------------
+  # Helm Chart Linting
+  # ------------------------------
+  helm_lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'latest'
+
+      - name: Lint Helm chart
+        run: helm lint charts/scrapeme
+
+      - name: Template validation
+        run: helm template scrapeme charts/scrapeme --debug > /dev/null
+
+      - name: Dependency check
+        run: helm dependency list charts/scrapeme
+
+  # ------------------------------
+  # Security Scanning
+  # ------------------------------
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install security tools
+        run: pip install "bandit[toml]" safety
+
+      - name: Bandit security scan
+        run: bandit -r core/ config/ infra/ -c pyproject.toml -ll
+        continue-on-error: true
+
+      - name: Safety dependency check
+        run: safety check --file requirements.txt || true
 
   # -------------------------------------
   # Detect changed paths for conditional jobs
@@ -90,6 +138,10 @@ jobs:
               - 'infra/**'
             config:
               - 'config/**'
+            charts:
+              - 'charts/**'
+            tests:
+              - 'tests/**'
 
       - name: Set outputs
         id: setout
