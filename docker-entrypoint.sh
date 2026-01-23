@@ -4,9 +4,9 @@ set -e
 # Ensure directories exist and are writable
 mkdir -p /app/artifacts /app/results
 
-# Check if running as scraper user
-if [ "$(id -u)" = "1000" ]; then
-  echo "Running as scraper user (UID 1000)"
+# Check if running as appuser (matches Dockerfile UID 10001)
+if [ "$(id -u)" = "10001" ]; then
+  echo "Running as appuser (UID 10001)"
 
   # Verify write permissions
   if ! touch /app/results/.test 2>/dev/null; then

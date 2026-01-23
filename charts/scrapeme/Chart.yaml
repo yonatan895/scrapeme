@@ -1,23 +1,33 @@
 apiVersion: v2
 name: scrapeme
-description: Selenium automation framework
+description: Selenium automation framework for web scraping with observability
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "2.0.0"
+icon: https://raw.githubusercontent.com/SeleniumHQ/selenium/trunk/common/images/selenium-logo.svg
+keywords:
+  - selenium
+  - scraping
+  - automation
+  - browser
+maintainers:
+  - name: Yonatan Cohen
+    email: yonatan.leshco@gmail.com
 dependencies:
   - name: postgresql
-    version: 12.1.0
+    version: "18.2.3"
     repository: https://charts.bitnami.com/bitnami
     condition: postgresql.enabled
   - name: redis
-    version: 17.3.0
+    version: "24.1.2"
     repository: https://charts.bitnami.com/bitnami
     condition: redis.enabled
   - name: kafka
-    version: 26.0.0
+    version: "32.4.3"
     repository: https://charts.bitnami.com/bitnami
     condition: kafka.enabled
   - name: selenium-grid
-    version: 0.2.0
+    version: "0.51.0"
     repository: https://seleniumhq.github.io/docker-selenium/
     condition: selenium-grid.enabled
+

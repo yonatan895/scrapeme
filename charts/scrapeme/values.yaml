@@ -114,6 +114,43 @@ monitoring:
     # namespace: monitoring
     # labels: {}
 
+# Autoscaling configuration (requires mode: deployment)
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+  # Advanced scaling behavior
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max
+
+# Pod Disruption Budget (requires mode: deployment)
+pdb:
+  enabled: false
+  # minAvailable: 1
+  maxUnavailable: 1
+
+# Node placement
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
 # Infrastructure Dependencies
 postgresql:
   enabled: true

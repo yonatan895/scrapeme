@@ -1,0 +1,15 @@
+dependencies:
+- name: postgresql
+  repository: https://charts.bitnami.com/bitnami
+  version: 18.2.3
+- name: redis
+  repository: https://charts.bitnami.com/bitnami
+  version: 24.1.2
+- name: kafka
+  repository: https://charts.bitnami.com/bitnami
+  version: 32.4.3
+- name: selenium-grid
+  repository: https://seleniumhq.github.io/docker-selenium/
+  version: 0.51.0
+digest: sha256:bb7cca063c0ff887d286835fbe6f2043036c13a6725fb31f429a1ed6a55b3c3b
+generated: "2026-01-23T14:23:39.778387593+02:00"

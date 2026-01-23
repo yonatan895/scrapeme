@@ -14,7 +14,7 @@ h11==0.16.0
     # via wsproto
 idna==3.11
     # via trio
-kafka-python==2.0.2
+kafka-python-ng==2.2.3
     # via scrapeme (pyproject.toml)
 lxml==6.0.2
     # via scrapeme (pyproject.toml)

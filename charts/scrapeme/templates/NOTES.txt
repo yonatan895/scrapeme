@@ -1,0 +1,73 @@
+===============================================================================
+  ScrapeMe - Selenium Automation Framework
+===============================================================================
+
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+{{- if eq .Values.mode "deployment" }}
+
+DEPLOYMENT MODE
+---------------
+ScrapeMe is running as a continuous deployment with {{ .Values.deployment.replicaCount }} replica(s).
+Loop interval: {{ .Values.deployment.loopInterval }} seconds
+
+{{- else if eq .Values.mode "cronjob" }}
+
+CRONJOB MODE
+------------
+ScrapeMe is configured as a CronJob.
+Schedule: {{ .Values.cronjob.schedule }}
+
+{{- end }}
+
+ACCESSING THE APPLICATION
+-------------------------
+
+1. Get the metrics endpoint:
+{{- if .Values.ingress.enabled }}
+   URL: http{{ if .Values.ingress.tls }}s{{ end }}://{{ (index .Values.ingress.hosts 0).host }}/metrics
+{{- else if contains "NodePort" .Values.service.type }}
+   export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "scrapeme.fullname" . }})
+   export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+   echo "Metrics URL: http://$NODE_IP:$NODE_PORT/metrics"
+{{- else if contains "LoadBalancer" .Values.service.type }}
+   NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+   kubectl get svc --namespace {{ .Release.Namespace }} -w {{ include "scrapeme.fullname" . }}
+{{- else if contains "ClusterIP" .Values.service.type }}
+   kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "scrapeme.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+   echo "Metrics URL: http://127.0.0.1:{{ .Values.service.port }}/metrics"
+{{- end }}
+
+2. Check health status:
+   kubectl get pods -n {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "scrapeme.name" . }}"
+
+3. View logs:
+   kubectl logs -n {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "scrapeme.name" . }}" -f
+
+MONITORING
+----------
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+ServiceMonitor is ENABLED - Prometheus will automatically scrape metrics.
+{{- else }}
+ServiceMonitor is DISABLED. Enable it with: --set monitoring.serviceMonitor.enabled=true
+{{- end }}
+
+DEPENDENCIES
+------------
+{{- if index .Values "selenium-grid" "enabled" }}
+✓ Selenium Grid: http://{{ .Release.Name }}-selenium-grid-hub:4444
+{{- end }}
+{{- if .Values.postgresql.enabled }}
+✓ PostgreSQL: {{ .Release.Name }}-postgresql:5432
+{{- end }}
+{{- if .Values.redis.enabled }}
+✓ Redis: {{ .Release.Name }}-redis-master:6379
+{{- end }}
+{{- if .Values.kafka.enabled }}
+✓ Kafka: {{ .Release.Name }}-kafka:9092
+{{- end }}
+
+For more information, visit: https://github.com/yonatan895/scrapeme

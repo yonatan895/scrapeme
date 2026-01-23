@@ -42,3 +42,27 @@ selenium-grid:
   enabled: true
   # Production Grid configuration
   replicas: 3
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 75
+
+pdb:
+  enabled: true
+  maxUnavailable: 1
+
+ingress:
+  enabled: false # Enable when you have a domain
+  # className: nginx
+  # hosts:
+  #   - host: scrapeme.example.com
+  #     paths:
+  #       - path: /
+  #         pathType: Prefix
+  # tls:
+  #   - secretName: scrapeme-tls
+  #     hosts:
+  #       - scrapeme.example.com

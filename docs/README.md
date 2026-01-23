@@ -8,3 +8,6 @@
 - Docker: docs/docker.md
 - Observability & Health: docs/observability.md
 - Architecture: docs/architecture.md
+- Kubernetes Deployment: docs/k8s.md
+- **Deployment Operations**: docs/deployment-operations.md (complete guide for updating, scaling, troubleshooting)
+

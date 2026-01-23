@@ -30,7 +30,7 @@ dependencies = [
     "lxml>=6.0.2",
     "orjson>=3.9.0",  # High-performance JSON encoder/decoder for all clients
     "pydantic>=2.0.0",
-    "kafka-python>=2.0.2",
+    "kafka-python-ng>=2.2.0",
     "redis>=5.0.1",
     "psycopg2-binary>=2.9.9",
 ]
@@ -202,6 +202,7 @@ markers = [
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
 ]
 
 # Coverage configuration

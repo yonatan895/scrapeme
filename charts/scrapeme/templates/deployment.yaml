@@ -41,7 +41,7 @@ spec:
             - "--metrics-port"
             - "{{ .Values.service.metricsPort }}"
             - "--json-logs"
-            {{- if or .Values.selenium.hubUrl .Values.selenium-grid.enabled }}
+            {{- if or .Values.selenium.hubUrl (index .Values "selenium-grid" "enabled") }}
             - "--remote-url"
             - "{{ if .Values.selenium.hubUrl }}{{ .Values.selenium.hubUrl }}{{ else }}http://{{ .Release.Name }}-selenium-grid-hub:4444{{ end }}"
             {{- else }}
